@@ -1,53 +1,48 @@
-import { defineConfig } from "@rspack/cli";
-import { rspack } from '@rspack/core';
-import path from 'node:path';
-import { type ChildProcess, spawn } from "node:child_process";
+import { defineConfig } from "@rspack/cli"
+import { rspack } from "@rspack/core"
+import path from "node:path"
+import { type ChildProcess, spawn } from "node:child_process"
 
-let electronProcess: ChildProcess | null = null;
+let electronProcess: ChildProcess | null = null
 
-const optionalPlugins: any[] = [];
-if (process.platform !== 'darwin') {
-  optionalPlugins.push(
-    new rspack.IgnorePlugin({ resourceRegExp: /^fsevents$/ }),
-  );
-  optionalPlugins.push(
-    new rspack.IgnorePlugin({ resourceRegExp: /^dmg-builder$/ }),
-  );
+const optionalPlugins: any[] = []
+if (process.platform !== "darwin") {
+  optionalPlugins.push(new rspack.IgnorePlugin({ resourceRegExp: /^fsevents$/ }))
+  optionalPlugins.push(new rspack.IgnorePlugin({ resourceRegExp: /^dmg-builder$/ }))
 }
-optionalPlugins.push(
-  new rspack.IgnorePlugin({ resourceRegExp: /^osx-temperature-sensor$/ }),
-);
+optionalPlugins.push(new rspack.IgnorePlugin({ resourceRegExp: /^osx-temperature-sensor$/ }))
 
 export default defineConfig((env) => {
-  const isDevelopment = !!env.RSPACK_SERVE;
-
+  console.log("main-env", env)
+  const isDevelopment = process.env.NODE_ENV === "development"
   return {
-    mode: process.env.NODE_ENV === 'development'? 'development' : 'production',
-    target: 'electron-main',
+    mode: isDevelopment ? "development" : "production",
+    devtool: "source-map",
+    target: "electron-main",
     entry: {
-      main: path.join(__dirname, './src/main/index.ts'),
+      main: path.join(__dirname, "./src/main/index.ts"),
     },
     output: {
-      path: path.join(__dirname, './dist/main'),
-      filename: '[name].js',
+      path: path.join(__dirname, "./dist/main"),
+      filename: "[name].js",
       library: {
-        type: 'commonjs2',
+        type: "commonjs2",
       },
     },
     resolve: {
-      extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
+      extensions: [".js", ".jsx", ".json", ".ts", ".tsx"],
     },
     module: {
       rules: [
         {
           test: /\.(ts|tsx|js|jsx)$/,
           exclude: [/[\\/]node_modules[\\/]/],
-          loader: 'builtin:swc-loader',
+          loader: "builtin:swc-loader",
           /** @type {import('@rspack/core').SwcLoaderOptions} */
           options: {
             jsc: {
               parser: {
-                syntax: 'typescript',
+                syntax: "typescript",
                 tsx: true,
                 decorators: false,
                 dynamicImport: true,
@@ -57,60 +52,59 @@ export default defineConfig((env) => {
         },
         {
           test: /\.(png|jpe?g|gif)$/i,
-          type: 'asset/resource',
+          type: "asset/resource",
         },
         {
           test: /\.(woff|woff2|eot|ttf|otf)$/i,
-          type: 'asset/resource',
+          type: "asset/resource",
         },
         {
           test: /\.jfif$/,
-          loader: 'file-loader',
+          loader: "file-loader",
           options: {
-            name: '[name].[ext]',
+            name: "[name].[ext]",
           },
         },
         {
           test: /\.mp3$/,
-          use: 'file-loader',
+          use: "file-loader",
         },
         {
           test: /\.svg$/,
-          use: ['@svgr/webpack', 'url-loader'],
+          use: ["@svgr/webpack", "url-loader"],
         },
         {
           test: /\.css$/i,
-          type: 'css',
+          type: "css",
         },
       ],
     },
     watch: isDevelopment,
     watchOptions: {
       ignored: /node_modules/,
-      include: ['src/main/**/*'],
+      include: ["src/main/**/*"],
     },
     plugins: [
       ...optionalPlugins,
       new rspack.DefinePlugin({
-        'process.env.NODE_ENV': JSON.stringify(isDevelopment ? 'development' : 'production'),
-        'process.env.ELECTRON_WEBPACK_WDS_PORT': JSON.stringify(3333),
+        "process.env.NODE_ENV": JSON.stringify(isDevelopment ? "development" : "production"),
+        "process.env.ELECTRON_WEBPACK_WDS_PORT": JSON.stringify(3333),
       }),
       {
         apply(compiler) {
-          if(!isDevelopment) return;
-
-          compiler.hooks.afterEmit.tap('AfterEmitPlugin', () => {
+          if (!isDevelopment) return
+          compiler.hooks.afterEmit.tap("AfterEmitPlugin", () => {
             if (electronProcess) {
-              electronProcess.kill();
+              electronProcess.kill()
             }
 
-            electronProcess = spawn('electron', [path.join(__dirname, './dist/main/main.js')], {
-              stdio: 'inherit',
-              shell: true
-            });
-          });
-        }
-      }
+            electronProcess = spawn("electron", [path.join(__dirname, "./dist/main/main.js")], {
+              stdio: "inherit",
+              shell: true,
+            })
+          })
+        },
+      },
     ],
   }
 })
