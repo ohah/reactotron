@@ -1,6 +1,9 @@
 import { defineConfig } from "@rspack/cli";
 import { rspack } from '@rspack/core';
 import path from 'node:path';
+import { type ChildProcess, spawn } from "node:child_process";
+
+let electronProcess: ChildProcess | null = null;
 
 const optionalPlugins: any[] = [];
 if (process.platform !== 'darwin') {
@@ -16,13 +19,13 @@ optionalPlugins.push(
 );
 
 export default defineConfig((env) => {
-  console.log('env', env)
+  const isDevelopment = !!env.RSPACK_SERVE;
+
   return {
     mode: process.env.NODE_ENV === 'development'? 'development' : 'production',
     target: 'electron-main',
     entry: {
       main: path.join(__dirname, './src/main/index.ts'),
-      // preload: path.join(__dirname, './src/main/preload.ts'),
     },
     output: {
       path: path.join(__dirname, './dist/main'),
@@ -34,30 +37,6 @@ export default defineConfig((env) => {
     resolve: {
       extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
     },
-    externals: [
-      'electron',
-      'webpack',
-      'electron-devtools-installer',
-      'webpack/hot/log-apply-result',
-      'electron-webpack/out/electron-main-hmr/HmrClient',
-      'source-map-support/source-map-support.js',
-      // Node.js 내장 모듈들
-      'fs',
-      'path',
-      'crypto',
-      'stream',
-      'buffer',
-      'util',
-      'assert',
-      'url',
-      'os',
-      'http',
-      'https',
-      'zlib',
-      'constants',
-      'timers',
-      'process',
-    ],
     module: {
       rules: [
         {
@@ -105,11 +84,33 @@ export default defineConfig((env) => {
         },
       ],
     },
+    watch: isDevelopment,
     watchOptions: {
       ignored: /node_modules/,
+      include: ['src/main/**/*'],
     },
     plugins: [
       ...optionalPlugins,
+      new rspack.DefinePlugin({
+        'process.env.NODE_ENV': JSON.stringify(isDevelopment ? 'development' : 'production'),
+        'process.env.ELECTRON_WEBPACK_WDS_PORT': JSON.stringify(3333),
+      }),
+      {
+        apply(compiler) {
+          if(!isDevelopment) return;
+
+          compiler.hooks.afterEmit.tap('AfterEmitPlugin', () => {
+            if (electronProcess) {
+              electronProcess.kill();
+            }
+
+            electronProcess = spawn('electron', [path.join(__dirname, './dist/main/main.js')], {
+              stdio: 'inherit',
+              shell: true
+            });
+          });
+        }
+      }
     ],
   }
 })

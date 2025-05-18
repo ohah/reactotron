@@ -2,11 +2,13 @@ import { rspack } from "@rspack/core";
 import { defineConfig } from "@rspack/cli";
 import type { SwcLoaderOptions } from "@rspack/core";
 import path from 'node:path';
+import { type ChildProcess, spawn } from "node:child_process";
 // import ReactRefreshRspackPlugin from '@rspack/plugin-react-refresh';
+let mainProcess: ChildProcess | null = null;
+let isFirstBuild = true
 
 export default defineConfig((env) => {
-  console.log('env', env)
-  console.log(`path.resolve(__dirname, '../../node_modules/reactotron-core-server')`, path.resolve(__dirname, '../../node_modules/reactotron-core-server'))
+  const isDevelopment = !!env.RSPACK_SERVE;
   return {
     mode: env.NODE_ENV === 'development' ? 'development' : 'production',
     devtool: 'source-map',
@@ -18,16 +20,35 @@ export default defineConfig((env) => {
       new rspack.ProvidePlugin({
         process: 'process/browser',
         Buffer: ['buffer', 'Buffer'],
-        https: 'https-browserify',  // https polyfill 추가
       }),
       new rspack.ProvidePlugin({
         React: 'react',
       }),
+      // TODO
       // env.RSPACK_SERVE && new ReactRefreshRspackPlugin({
       //   overlay: false,
       //   forceEnable: true,
       //   exclude: /.css.ts/,
       // }),
+      {
+        apply(compiler) {
+          if(!isDevelopment) return;
+
+          compiler.hooks.afterEmit.tap('AfterEmitPlugin', () => {
+            if(isFirstBuild) {
+              if(mainProcess) {
+                mainProcess.kill();
+              }
+
+              mainProcess = spawn('rspack', ['serve', '-c', './rspack.config.main.ts'], {
+                stdio: 'inherit',
+                shell: true
+              });
+              isFirstBuild = false
+            }
+          });
+        }
+      }
     ].filter(Boolean),
     target: ['web', 'electron-renderer'],
     experiments: {
@@ -44,12 +65,7 @@ export default defineConfig((env) => {
       static: path.join(__dirname, './dist/renderer'),
       port: 3333,
       hot: false,
-      liveReload: false,
-    },
-    node: {
-      __dirname: true,
-      __filename: true,
-      global: true,
+      liveReload: true,
     },
     externals: [
       'electron',
@@ -68,24 +84,12 @@ export default defineConfig((env) => {
       'constants',
       'timers',
       'process',
+      'mitt',
+      'ws',
     ],
     resolve: {
-      fallback: {
-        fs: false,  // 실제 Node.js fs 모듈 사용
-        path: false,  // 실제 Node.js path 모듈 사용
-        crypto: false,  // 실제 Node.js crypto 모듈 사용
-        stream: false,  // 실제 Node.js stream 모듈 사용
-        buffer: false,  // 실제 Node.js buffer 모듈 사용
-        util: false,  // 실제 Node.js util 모듈 사용
-        assert: false,  // 실제 Node.js assert 모듈 사용
-        url: false,  // 실제 Node.js url 모듈 사용
-        os: false,  // 실제 Node.js os 모듈 사용
-        http: false,  // 실제 Node.js http 모듈 사용
-        https: require.resolve('https-browserify'),  // https polyfill 추가
-        zlib: false,  // 실제 Node.js zlib 모듈 사용
-        constants: false,  // 실제 Node.js constants 모듈 사용
-        timers: false,  // 실제 Node.js timers 모듈 사용
-        process: false,  // 실제 Node.js process 모듈 사용
+      alias: {
+        'reactotron-core-server': require.resolve('reactotron-core-server'),
       },
       modules: [
         'node_modules',
@@ -97,13 +101,6 @@ export default defineConfig((env) => {
     },
     module: {
       rules: [
-        // https://github.com/react-dnd/react-dnd/issues/3425
-        {
-          test: /\.m?js$/,
-          resolve: {
-            fullySpecified: false,
-          },
-        },
         {
           test: /\.(js|jsx|ts|tsx)$/,
           exclude: [/[\\/]node_modules[\\/]/],
@@ -119,7 +116,6 @@ export default defineConfig((env) => {
                   throwIfNamespace: false,
                   development: false,
                   refresh: false,
-                  useSpread: false,
                   useBuiltins: false,
                   runtime: 'automatic',
                 },

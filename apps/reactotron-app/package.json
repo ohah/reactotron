@@ -20,9 +20,8 @@
   "homepage": "https://github.com/infinitered/reactotron#readme",
   "scripts": {
     "compile": "tsc",
-    "start": "electron-webpack dev",
     "clean": "rimraf ./dist",
-    "build": "electron-webpack",
+    "build": "rspack build -c ./rspack.config.renderer.ts && rspack build -c ./rspack.config.main.ts",
     "build:release": "node scripts/build.release.js",
     "release:artifacts": "node scripts/release.artifacts.js",
     "test": "jest",
@@ -33,10 +32,8 @@
     "lint": "eslint 'src/**/**.{ts,tsx}'",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook",
-    "dev": "rspack serve -c ./rspack.config.renderer.ts",
+    "start": "rspack serve -c ./rspack.config.renderer.ts",
     "main": "rspack build -c ./rspack.config.main.ts",
-    "main:dev": "rspack build -c ./rspack.config.main.ts --mode development",
-    "start:rspack": "electron ./dist/main/main.js",
     "typecheck": "tsc --noEmit",
     "ci:test": "yarn test --runInBand"
   },
