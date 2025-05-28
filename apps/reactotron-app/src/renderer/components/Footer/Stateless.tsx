@@ -2,7 +2,6 @@ import React from "react"
 import styled from "styled-components"
 import { MdSwapVert as ExpandIcon } from "react-icons/md"
 
-import config from "../../config"
 import {
   getPlatformName,
   getPlatformDetails,
@@ -10,6 +9,7 @@ import {
 } from "../../util/connectionHelpers"
 import { Connection, ServerStatus } from "../../contexts/Standalone/useStandalone"
 import ConnectionSelector from "../ConnectionSelector"
+import { config } from "src/renderer/util/ipc"
 
 const Container = styled.div`
   border-top: 1px solid ${(props) => props.theme.chromeLine};

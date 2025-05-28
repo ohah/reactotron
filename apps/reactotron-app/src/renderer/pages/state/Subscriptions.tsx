@@ -1,4 +1,4 @@
-import React, { useContext } from "react"
+import React, { useContext, useEffect } from "react"
 import {
   ReactotronContext,
   ContentView,
@@ -67,6 +67,11 @@ function Subscriptions() {
     : null
 
   const subscriptionValues = getLatestChanges(commands)
+
+
+  useEffect(() => {
+    console.log('subscriptionValues', subscriptionValues)
+  }, [subscriptionValues])
 
   return (
     <Container>
