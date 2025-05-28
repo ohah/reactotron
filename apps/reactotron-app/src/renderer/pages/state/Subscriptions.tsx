@@ -68,11 +68,6 @@ function Subscriptions() {
 
   const subscriptionValues = getLatestChanges(commands)
 
-
-  useEffect(() => {
-    console.log('subscriptionValues', subscriptionValues)
-  }, [subscriptionValues])
-
   return (
     <Container>
       <Header
