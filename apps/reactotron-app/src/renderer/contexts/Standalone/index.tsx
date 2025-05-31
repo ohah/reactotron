@@ -85,7 +85,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const sendCommand = useCallback(
     (type: string, payload: any, clientId?: string) => {
-      if(!reactotronServer.current) return;
+      if(!reactotronIsServerStarted.current) return;
       
       ipcRenderer?.send('core-server-send-command', { type, payload, clientId: clientId || selectedClientId })
     },
