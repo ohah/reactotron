@@ -21,7 +21,7 @@ const StandaloneContext = React.createContext<Context>({
 })
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const reactotronServer = useRef<boolean>(false)
+  const reactotronIsServerStarted = useRef<boolean>(false)
 
   const {
     serverStatus,
@@ -41,11 +41,11 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     ipcRenderer.on('start', () => {
-      reactotronServer.current = true
+      reactotronIsServerStarted.current = true
       serverStarted()
     })
     ipcRenderer.on('stop', () => {
-      reactotronServer.current = false
+      reactotronIsServerStarted.current = false
       serverStopped()
     })
     ipcRenderer.on('connectionEstablished', (_, args) => {
