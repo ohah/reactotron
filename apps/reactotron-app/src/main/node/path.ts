@@ -1,6 +1,5 @@
 import { ipcMain } from "electron"
-
-const path = require('node:path')
+import path from 'node:path'
 
 export const pathInit = () => {
   ipcMain.on('path-join', (event, args) => {
