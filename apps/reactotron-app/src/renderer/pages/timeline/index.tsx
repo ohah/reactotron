@@ -20,7 +20,7 @@ import {
 } from "react-icons/md"
 import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
-import { clipboard, fs, os, path, shell } from "src/renderer/util/ipc"
+import { clipboard, fs, os, path, shell } from "../../util/ipc"
 
 const Container = styled.div`
   display: flex;

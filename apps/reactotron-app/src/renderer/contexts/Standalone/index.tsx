@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useCallback } from "react"
 import ReactotronBrain from "../../ReactotronBrain"
 
 import useStandalone, { type Connection, type ServerStatus } from "./useStandalone"
-import { ipcRenderer } from "src/renderer/util/ipc"
+import { ipcRenderer } from "../../util/ipc"
 
 // TODO: Move up to better places like core somewhere!
 interface Context {

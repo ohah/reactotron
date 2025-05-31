@@ -15,7 +15,7 @@ import { OverlayMargins } from "./components/OverlayMargins"
 import type { DragEvent } from "react"
 import type { JustifyContent, AlignItems } from "./components/OverlayAlignment"
 import type { ResizeMode } from "./components/OverlayResizeMode"
-import { fs, nativeImage } from "src/renderer/util/ipc"
+import { fs, nativeImage } from "../../util/ipc"
 
 const isDevelopment = process.env.NODE_ENV !== "production"
 

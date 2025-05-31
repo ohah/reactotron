@@ -11,7 +11,7 @@ import { getApplicationKeyMap } from "react-hotkeys"
 import { ItemContainer, ItemIconContainer } from "./SharedStyles"
 import KeybindGroup from "./components/KeybindGroup"
 import { reactotronLogo } from "../../images"
-import { shell } from "src/renderer/util/ipc"
+import { shell } from "../../util/ipc"
 
 const projectJson = require("../../../../package.json")
 

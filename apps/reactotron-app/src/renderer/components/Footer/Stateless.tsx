@@ -7,9 +7,9 @@ import {
   getPlatformDetails,
   getConnectionName,
 } from "../../util/connectionHelpers"
-import { Connection, ServerStatus } from "../../contexts/Standalone/useStandalone"
+import type { Connection, ServerStatus } from "../../contexts/Standalone/useStandalone"
 import ConnectionSelector from "../ConnectionSelector"
-import { config } from "src/renderer/util/ipc"
+import { config } from "../../util/ipc"
 
 const Container = styled.div`
   border-top: 1px solid ${(props) => props.theme.chromeLine};

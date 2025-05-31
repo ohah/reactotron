@@ -2,7 +2,7 @@ import React from "react"
 import styled from "styled-components"
 import { reactotronLogo } from "../../images"
 import { EmptyState } from "reactotron-core-ui"
-import { shell } from "src/renderer/util/ipc"
+import { shell } from "../../util/ipc"
 
 const WelcomeText = styled.div`
   font-size: 1.25em;

@@ -7,7 +7,7 @@ import { IoReloadOutline as ReloadAppIcon } from "react-icons/io5"
 import { EmptyState, Tooltip } from "reactotron-core-ui"
 import { FaAndroid } from "react-icons/fa"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
-import { ipcRenderer } from "src/renderer/util/ipc"
+import { ipcRenderer } from "../../../util/ipc"
 
 const Container = styled.div`
   margin: 50px 0px;

@@ -18,7 +18,7 @@ import {
   MdCallReceived,
   MdFileDownload,
 } from "react-icons/md"
-import { clipboard } from "src/renderer/util/ipc"
+import { clipboard } from "../../util/ipc"
 
 const Container = styled.div`
   display: flex;
