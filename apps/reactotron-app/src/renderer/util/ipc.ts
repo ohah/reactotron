@@ -12,12 +12,23 @@ export const nativeImage = window?.electron?.nativeImage
 export const webFrame = window?.electron?.webFrame
 
 export const fs = {
-  readFile: (path: string, callback: (err: Error | null, data: Buffer) => void) => {
+  readFile: (path: string, encodingOrCallback: string | ((err: Error | null, data: any) => void), callback?: (err: Error | null, data: any) => void) => {
     const responseChannel = 'fs-read-file';
-    window.electron.ipcRenderer.once(responseChannel, (event, err, data) => {
-      callback(err, data);
-    });
-    window.electron.ipcRenderer.send('fs-read-file', path, responseChannel);
+    
+    // fs.readFile(path, (err, data) => { ... })
+    if (typeof encodingOrCallback === 'function') {
+      window.electron.ipcRenderer.once(responseChannel, (event, err, data) => {
+        encodingOrCallback(err, data);
+      });
+      window.electron.ipcRenderer.send('fs-read-file', path, null, responseChannel);
+    } 
+    // fs.readFile(path, "utf-8", (err, data) => { ... })
+    else if (callback) {
+      window.electron.ipcRenderer.once(responseChannel, (event, err, data) => {
+        callback(err, data);
+      });
+      window.electron.ipcRenderer.send('fs-read-file', path, encodingOrCallback, responseChannel);
+    }
   },
   readFileSync: (path: string, encoding: string) => ipcRenderer.sendSync('fs-readFile-sync', { path, encoding }),
   writeFileSync: (path: string, data: string, encoding: string) => ipcRenderer.sendSync('fs-writeFile-sync', { path, data, encoding }),
