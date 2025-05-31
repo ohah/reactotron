@@ -149,7 +149,7 @@ export default defineConfig((env) => {
             // Force kill existing Electron process
             if (electronProcess) {
               console.log("🔄 Restarting Electron process...")
-              
+
               // Kill entire process tree on Windows
               if (process.platform === "win32" && electronProcess.pid) {
                 try {
@@ -169,7 +169,7 @@ export default defineConfig((env) => {
                   }
                 }, 2000)
               }
-              
+
               electronProcess = null
             }
 
@@ -179,11 +179,11 @@ export default defineConfig((env) => {
                 stdio: "inherit",
                 shell: true,
               })
-              
+
               electronProcess.on("error", (err) => {
                 console.error("❌ Electron process error:", err)
               })
-              
+
               electronProcess.on("exit", (code, signal) => {
                 console.log(`🔄 Electron process exited with code ${code} and signal ${signal}`)
                 electronProcess = null

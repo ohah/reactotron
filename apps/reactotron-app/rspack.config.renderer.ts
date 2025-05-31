@@ -58,7 +58,7 @@ export default defineConfig((env) => {
               // 2. Build main process after preload build completes
               preloadProcess.on("close", (code) => {
                 console.log(`🔧 Preload build process exited with code ${code}`)
-                
+
                 if (code === 0) {
                   // Only build main process if preload build was successful
                   console.log("✅ Preload build successful, starting main build...")
@@ -70,7 +70,7 @@ export default defineConfig((env) => {
                       NODE_ENV: "development",
                     },
                   })
-                  
+
                   mainProcess.on("close", (mainCode) => {
                     console.log(`🎯 Main build process exited with code ${mainCode}`)
                     if (mainCode === 0) {
@@ -178,4 +178,3 @@ export default defineConfig((env) => {
     },
   }
 })
-

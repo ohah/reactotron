@@ -1,5 +1,5 @@
 import { find, propEq, without, forEach, pluck, reject, equals, mergeRight, includes } from "ramda"
-import { createServer as createHttpsServer } from "node:https" 
+import { createServer as createHttpsServer } from "node:https"
 import type { ServerOptions as HttpsServerOptions } from "node:https"
 import type {
   ServerEventMap,
@@ -17,7 +17,7 @@ import validate from "./validation"
 import { repair } from "./repair-serialization"
 import { readFileSync } from "node:fs"
 
-import mitt from 'mitt'
+import mitt from "mitt"
 // type Mitt = typeof import("mitt").default // I'm so sorry, Jest made me do this :'(
 // const mitt: Mitt = require("mitt")
 
@@ -342,7 +342,7 @@ export default class Server {
     }
 
     this.wss?.close()
-    console.log('wss closed', this.wss)
+    console.log("wss closed", this.wss)
 
     // trigger the stop message
     this.emitter.emit("stop")
