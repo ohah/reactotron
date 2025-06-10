@@ -40,39 +40,39 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   } = useStandalone()
 
   useEffect(() => {
-    ipcRenderer.on('start', () => {
-      reactotronIsServerStarted.current = true
-      serverStarted()
-    })
-    ipcRenderer.on('stop', () => {
-      reactotronIsServerStarted.current = false
-      serverStopped()
-    })
-    ipcRenderer.on('connectionEstablished', (_, args) => {
-      connectionEstablished(args)
-    })
-    ipcRenderer.on('command', (_, args) => {
-      commandReceived(args)
-    })
-    ipcRenderer.on('disconnect', (_, args) => {
-      connectionDisconnected(args)
-    })
-    ipcRenderer.on('portUnavailable', () => {
-      portUnavailable()
-    })
+    // ipcRenderer.on('start', () => {
+    //   reactotronIsServerStarted.current = true
+    //   serverStarted()
+    // })
+    // ipcRenderer.on('stop', () => {
+    //   reactotronIsServerStarted.current = false
+    //   serverStopped()
+    // })
+    // ipcRenderer.on('connectionEstablished', (_, args) => {
+    //   connectionEstablished(args)
+    // })
+    // ipcRenderer.on('command', (_, args) => {
+    //   commandReceived(args)
+    // })
+    // ipcRenderer.on('disconnect', (_, args) => {
+    //   connectionDisconnected(args)
+    // })
+    // ipcRenderer.on('portUnavailable', () => {
+    //   portUnavailable()
+    // })
 
 
-    ipcRenderer.sendSync('core-server-start');
+    // ipcRenderer.sendSync('core-server-start');
     
     
     return () => {
-      ipcRenderer.removeAllListeners('start')
-      ipcRenderer.removeAllListeners('stop')
-      ipcRenderer.removeAllListeners('connectionEstablished')
-      ipcRenderer.removeAllListeners('command')
-      ipcRenderer.removeAllListeners('disconnect')
-      ipcRenderer.removeAllListeners('portUnavailable')
-      ipcRenderer.sendSync('core-server-stop');
+      // ipcRenderer.removeAllListeners('start')
+      // ipcRenderer.removeAllListeners('stop')
+      // ipcRenderer.removeAllListeners('connectionEstablished')
+      // ipcRenderer.removeAllListeners('command')
+      // ipcRenderer.removeAllListeners('disconnect')
+      // ipcRenderer.removeAllListeners('portUnavailable')
+      // ipcRenderer.sendSync('core-server-stop');
     }
   }, [
     serverStarted,
