@@ -1,5 +1,19 @@
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tokio::net::TcpListener;
+use tokio_tungstenite::accept_async;
+use futures_util::{StreamExt, SinkExt};
+use serde::{Deserialize, Serialize};
 use tauri_plugin_store::StoreExt;
+use tauri::Emitter;
+use tauri::async_runtime;
+mod reactotron_core_server;
+use reactotron_core_server::start_reactotron_core_server;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -14,6 +28,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .setup(|app| {
+            let app_handle = app.handle().clone();
+            start_reactotron_core_server(app_handle);
             #[cfg(debug_assertions)]
             {
                 let window = app.get_webview_window("main").unwrap();
