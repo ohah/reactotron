@@ -28,3 +28,4 @@ tokio = { version = "1.45.1", features = ["full"] }
 tokio-tungstenite = "0.26.2"
 futures-util = "0.3.31"
 tauri-plugin-fs = "2"
+tauri-plugin-clipboard-manager = "2"

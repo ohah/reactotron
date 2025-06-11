@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useMemo } from "react"
 import * as path from '@tauri-apps/api/path';
-
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import debounce from "lodash.debounce"
 import {
   Header,
@@ -22,7 +22,6 @@ import {
 } from "react-icons/md"
 import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
-import { clipboard, fs, os, path } from "../../util/ipc"
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
@@ -212,7 +211,7 @@ function Timeline() {
                 <CommandComponent
                   key={command.messageId}
                   command={command}
-                  copyToClipboard={clipboard.writeText}
+                  copyToClipboard={writeText}
                   readFile={async (filePath) => {
                     try {
                       const data = await readTextFile(filePath)

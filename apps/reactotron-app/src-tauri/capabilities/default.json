@@ -18,6 +18,7 @@
         }
       ]
     },
-    "fs:default"
+    "fs:default",
+    "clipboard-manager:default"
   ]
 }
