@@ -3,17 +3,9 @@
     windows_subsystem = "windows"
 )]
 
-use std::sync::{Arc, Mutex};
-use tauri::Manager;
-use tokio::net::TcpListener;
-use tokio_tungstenite::accept_async;
-use futures_util::{StreamExt, SinkExt};
-use serde::{Deserialize, Serialize};
-use tauri_plugin_store::StoreExt;
-use tauri::Emitter;
-use tauri::async_runtime;
 mod reactotron_core_server;
 use reactotron_core_server::start_reactotron_core_server;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
