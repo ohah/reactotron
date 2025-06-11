@@ -1,4 +1,6 @@
 import React, { useCallback, useContext, useMemo } from "react"
+import * as path from '@tauri-apps/api/path';
+
 import debounce from "lodash.debounce"
 import {
   Header,
@@ -22,6 +24,7 @@ import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
 import { clipboard, fs, os, path } from "../../util/ipc"
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const Container = styled.div`
   display: flex;
@@ -117,14 +120,11 @@ function Timeline() {
     openUrl("https://docs.infinite.red/reactotron/quick-start/react-native/")
   }
 
-  function downloadLog() {
-    const homeDir = os.homedir()
-    const downloadDir = path.join(homeDir, "Downloads")
-    fs.writeFileSync(
-      path.resolve(downloadDir, `timeline-log-${Date.now()}.json`),
-      JSON.stringify(commands || []),
-      "utf8"
-    )
+  async function downloadLog() {
+    const homeDir = await path.homeDir();
+    const downloadDir = await path.join(homeDir, "Downloads")
+    const filePath = await path.join(downloadDir, `timeline-log-${Date.now()}.json`)  
+    await writeTextFile(filePath, JSON.stringify(commands || []))
     console.log(`Exported timeline log to ${downloadDir}`)
   }
 
@@ -213,13 +213,13 @@ function Timeline() {
                   key={command.messageId}
                   command={command}
                   copyToClipboard={clipboard.writeText}
-                  readFile={(path) => {
-                    return new Promise((resolve, reject) => {
-                      fs.readFile(path, "utf-8", (err, data) => {
-                        if (err || !data) reject(new Error("Something failed"))
-                        else resolve(data)
-                      })
-                    })
+                  readFile={async (filePath) => {
+                    try {
+                      const data = await readTextFile(filePath)
+                      return data
+                    } catch (err) {
+                      throw new Error("Something failed")
+                    }
                   }}
                   sendCommand={sendCommand}
                   dispatchAction={dispatchAction}
