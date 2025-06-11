@@ -6960,7 +6960,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/plugin-opener@npm:^2":
+"@tauri-apps/plugin-opener@npm:~2":
   version: 2.2.7
   resolution: "@tauri-apps/plugin-opener@npm:2.2.7"
   dependencies:
@@ -25724,7 +25724,7 @@ __metadata:
     "@storybook/react": "npm:^5.2.8"
     "@tauri-apps/api": "npm:^2"
     "@tauri-apps/cli": "npm:^2"
-    "@tauri-apps/plugin-opener": "npm:^2"
+    "@tauri-apps/plugin-opener": "npm:~2"
     "@tauri-apps/plugin-os": "npm:~2"
     "@tauri-apps/plugin-store": "npm:~2"
     "@testing-library/react": "npm:^14.1.2"

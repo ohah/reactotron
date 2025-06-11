@@ -20,7 +20,8 @@ import {
 } from "react-icons/md"
 import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
-import { clipboard, fs, os, path, shell } from "../../util/ipc"
+import { clipboard, fs, os, path } from "../../util/ipc"
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 const Container = styled.div`
   display: flex;
@@ -113,7 +114,7 @@ function Timeline() {
   }
 
   function openDocs() {
-    shell.openExternal("https://docs.infinite.red/reactotron/quick-start/react-native/")
+    openUrl("https://docs.infinite.red/reactotron/quick-start/react-native/")
   }
 
   function downloadLog() {
