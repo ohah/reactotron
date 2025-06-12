@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useCallback } from "react"
+import { listen } from '@tauri-apps/api/event'
 
 import ReactotronBrain from "../../ReactotronBrain"
 
 import useStandalone, { type Connection, type ServerStatus } from "./useStandalone"
-import { ipcRenderer } from "../../util/ipc"
+import { invoke } from "@tauri-apps/api/core"
 
 // TODO: Move up to better places like core somewhere!
 interface Context {
@@ -40,39 +41,40 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   } = useStandalone()
 
   useEffect(() => {
-    // ipcRenderer.on('start', () => {
-    //   reactotronIsServerStarted.current = true
-    //   serverStarted()
-    // })
-    // ipcRenderer.on('stop', () => {
-    //   reactotronIsServerStarted.current = false
-    //   serverStopped()
-    // })
-    // ipcRenderer.on('connectionEstablished', (_, args) => {
-    //   connectionEstablished(args)
-    // })
-    // ipcRenderer.on('command', (_, args) => {
-    //   commandReceived(args)
-    // })
-    // ipcRenderer.on('disconnect', (_, args) => {
-    //   connectionDisconnected(args)
-    // })
-    // ipcRenderer.on('portUnavailable', () => {
-    //   portUnavailable()
-    // })
+    const unlistenStart = listen('start', (event) => {
+      console.log('start', event)
+      reactotronIsServerStarted.current = true
+      serverStarted()
+    })
+    const unlistenStop = listen('stop', (event) => {
+      console.log('stop', event)
+      reactotronIsServerStarted.current = false
+      serverStopped()
+    })
+
+    const unlistenCommnad = listen('command', (event) => {
+      console.log('command', event)
+      if(event.payload.type === 'connectionEstablished') {
+        connectionEstablished(event.payload)
+      } else if(event.payload.type === 'command') {
+        commandReceived(event.payload)
+      } else if(event.payload.type === 'disconnect') {
+        connectionDisconnected(event.payload)
+      } else if(event.payload.type === 'portUnavailable') {
+        portUnavailable()
+      }
+    })
+
 
 
     // ipcRenderer.sendSync('core-server-start');
+    invoke('start_core_server')
     
     
     return () => {
-      // ipcRenderer.removeAllListeners('start')
-      // ipcRenderer.removeAllListeners('stop')
-      // ipcRenderer.removeAllListeners('connectionEstablished')
-      // ipcRenderer.removeAllListeners('command')
-      // ipcRenderer.removeAllListeners('disconnect')
-      // ipcRenderer.removeAllListeners('portUnavailable')
-      // ipcRenderer.sendSync('core-server-stop');
+      unlistenStart?.then((unlisten) => unlisten())
+      unlistenStop?.then((unlisten) => unlisten())
+      unlistenCommnad?.then((unlisten) => unlisten())
     }
   }, [
     serverStarted,
@@ -87,7 +89,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     (type: string, payload: any, clientId?: string) => {
       if(!reactotronIsServerStarted.current) return;
       
-      ipcRenderer?.send('core-server-send-command', { type, payload, clientId: clientId || selectedClientId })
+      invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
     },
     [selectedClientId]
   )
