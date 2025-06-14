@@ -69,7 +69,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const unlistenCommnad = listen('command', (event) => {
       console.log('command', event)
-      commandReceived(event.payload);
+      commandReceived(event.payload)
       // commandReceived(event.payload)
       // } else if(event.payload.type === 'disconnect') {
       //   connectionDisconnected(event.payload)
