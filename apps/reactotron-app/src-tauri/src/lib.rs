@@ -7,10 +7,10 @@ mod reactotron_core_server;
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+// #[tauri::command]
+// fn send_command(name: &str) -> String {
+//     format!("Hello, {}! You've been greeted from Rust!", name)
+// }
 
 #[tauri::command]
 fn start_core_server(app: tauri::AppHandle) {
@@ -22,6 +22,22 @@ fn stop_core_server(app: tauri::AppHandle) {
     reactotron_core_server::stop_server(app);
 }
 
+#[tauri::command]
+fn send_command(
+    app: tauri::AppHandle, 
+    r#type: String, 
+    payload: serde_json::Value, 
+    client_id: String
+) {
+    let command = reactotron_core_server::CommandWithClientId {
+        r#type,
+        payload,
+        client_id,
+    };
+    println!("send_command: {:?}", command);
+    reactotron_core_server::send_command(app, command);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -31,9 +47,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             start_core_server,
-            stop_core_server
+            stop_core_server,
+            send_command,
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

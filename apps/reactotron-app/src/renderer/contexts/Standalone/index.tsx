@@ -52,17 +52,30 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       serverStopped()
     })
 
+    const unlistenConnectionEstablished = listen('connectionEstablished', (event) => {
+      console.log('connectionEstablished', event)
+      connectionEstablished(event.payload)
+    })
+
+    const unlistenDisconnect = listen('disconnect', (event) => {
+      console.log('disconnect', event)
+      connectionDisconnected(event.payload)
+    })
+
+    const unlistenCustomCommandRegister = listen('portUnavailable', (event) => {
+      console.log('portUnavailable', event)
+      portUnavailable(event.payload)
+    })
+
     const unlistenCommnad = listen('command', (event) => {
       console.log('command', event)
-      if(event.payload.type === 'connectionEstablished') {
-        connectionEstablished(event.payload)
-      } else if(event.payload.type === 'command') {
-        commandReceived(event.payload)
-      } else if(event.payload.type === 'disconnect') {
-        connectionDisconnected(event.payload)
-      } else if(event.payload.type === 'portUnavailable') {
-        portUnavailable()
-      }
+      commandReceived(event.payload);
+      // commandReceived(event.payload)
+      // } else if(event.payload.type === 'disconnect') {
+      //   connectionDisconnected(event.payload)
+      // } else if(event.payload.type === 'portUnavailable') {
+      //   portUnavailable(event.payload)
+      // }
     })
 
 
@@ -70,11 +83,13 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ipcRenderer.sendSync('core-server-start');
     invoke('start_core_server')
     
-    
     return () => {
       unlistenStart?.then((unlisten) => unlisten())
       unlistenStop?.then((unlisten) => unlisten())
+      unlistenConnectionEstablished?.then((unlisten) => unlisten())
       unlistenCommnad?.then((unlisten) => unlisten())
+      unlistenDisconnect?.then((unlisten) => unlisten())
+      unlistenCustomCommandRegister?.then((unlisten) => unlisten())
     }
   }, [
     serverStarted,
@@ -88,7 +103,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const sendCommand = useCallback(
     (type: string, payload: any, clientId?: string) => {
       if(!reactotronIsServerStarted.current) return;
-      
+      console.log('sendCommand', type, payload, clientId || selectedClientId)
       invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
     },
     [selectedClientId]

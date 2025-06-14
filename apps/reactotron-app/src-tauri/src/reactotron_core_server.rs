@@ -6,13 +6,21 @@ use tauri::Emitter;
 use tauri::Listener;
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
+use tokio_tungstenite::tungstenite::Message;
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as TokioMutex;  // 상단에 추가
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command {
     pub r#type: String,
     pub payload: serde_json::Value,
-    // add fields..
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandWithClientId {
+    pub r#type: String,
+    pub payload: serde_json::Value,
+    pub client_id: String,
 }
 
 type ServerHandle = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
@@ -28,8 +36,19 @@ pub fn get_server_handle() -> &'static ServerHandle {
     }
 }
 
-pub fn start_server(app_handle: AppHandle) {
+type WsStream = Arc<TokioMutex<Option<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>>;
+static mut WS_STREAM: Option<WsStream> = None;
 
+pub fn get_ws_stream() -> &'static WsStream {
+    unsafe {
+        if WS_STREAM.is_none() {
+            WS_STREAM = Some(Arc::new(TokioMutex::new(None)));
+        }
+        WS_STREAM.as_ref().unwrap()
+    }
+}
+
+pub fn start_server(app_handle: AppHandle) {
     let server_handle = get_server_handle();
     {
         let mut guard = server_handle.lock().unwrap();
@@ -50,15 +69,38 @@ pub fn start_server(app_handle: AppHandle) {
             app_handle.emit("start", "start").unwrap();
 
             async_runtime::spawn(async move {
-                let mut ws_stream = accept_async(stream).await.unwrap();
+                let ws_stream = get_ws_stream();
+                let mut ws = accept_async(stream).await.unwrap();
+                println!("WebSocket connection accepted");
+                
+                {
+                    let mut guard = ws_stream.lock().await;
+                    *guard = Some(ws);
+                    println!("WebSocket stream stored");
+                }
 
-                while let Some(msg) = ws_stream.next().await {
-                    let msg = msg.unwrap();
-                    if msg.is_text() {
-                        let text = msg.to_text().unwrap();
-                        if let Ok(cmd) = serde_json::from_str::<Command>(text) {
-                            println!("received: {:?}", cmd);
-                            app_handle.emit("command", &cmd).unwrap();
+                let mut ws_ref = ws_stream.lock().await;
+                if let Some(ws) = ws_ref.as_mut() {
+                    while let Some(msg) = ws.next().await {
+                        println!("Received raw message");
+                        let msg = msg.unwrap();
+                        if msg.is_text() {
+                            let text = msg.to_text().unwrap();
+                            println!("Received text: {}", text);
+                            if let Ok(cmd) = serde_json::from_str::<Command>(text) {
+                                println!("received: {:?}", cmd);
+                                if cmd.r#type == "client.intro" {
+                                    let payload = cmd.payload.clone();
+                                    app_handle.emit("connectionEstablished", &payload).unwrap();
+                                }
+                                if cmd.r#type == "customCommand.register" {
+                                    let payload = cmd.payload.clone();
+                                    app_handle.emit("customCommandRegister", &payload).unwrap();
+                                }
+                                app_handle.emit("command", &cmd).unwrap();
+                            } else {
+                                println!("Failed to parse command: {}", text);
+                            }
                         }
                     }
                 }
@@ -74,7 +116,18 @@ pub fn stop_server(app_handle: AppHandle) {
     let server_handle = get_server_handle();
     let mut guard = server_handle.lock().unwrap();
     if let Some(handle) = guard.take() {
-        handle.abort(); // tokio의 abort로 종료
+        handle.abort();
         app_handle.emit("stop", "stop").unwrap();
+    }
+}
+
+pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
+    let ws_stream = get_ws_stream();
+    let mut guard = ws_stream.lock().await;
+    println!("async send_command: {:?}", command);
+    if let Some(ws) = guard.as_mut() {
+        let command_json = serde_json::to_string(&command).unwrap();
+        let message = Message::Text(command_json.into());
+        ws.send(message).await.unwrap();
     }
 }
