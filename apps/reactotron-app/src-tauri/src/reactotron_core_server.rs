@@ -34,6 +34,7 @@ pub struct Command {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommandWithClientId {
     pub r#type: String,
     pub payload: serde_json::Value,
@@ -106,7 +107,17 @@ pub fn start_server(app_handle: AppHandle) {
     }
 
     let handle = async_runtime::spawn(async move {
-        let listener = TcpListener::bind("0.0.0.0:9090").await.unwrap();
+        let listener = match TcpListener::bind("0.0.0.0:9090").await {
+            Ok(listener) => listener,
+            Err(e) => {
+                if e.to_string().contains("EADDRINUSE") {
+                    app_handle.emit("portUnavailable", 9090).unwrap();
+                } else {
+                    println!("Error starting server: {}", e);
+                }
+                return;
+            }
+        };
         println!("WebSocket server started: ws://0.0.0.0:9090");
 
         let mut connection_id = 0;
