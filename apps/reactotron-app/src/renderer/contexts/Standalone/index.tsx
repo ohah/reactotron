@@ -78,6 +78,17 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       // }
     })
 
+    const unlistenDisconnect = listen('disconnect', (event) => {
+      console.log('disconnect', event)
+      connectionDisconnected(event.payload)
+    })
+
+    const unlistenPortUnavailable = listen('portUnavailable', (event) => {
+      console.log('portUnavailable', event)
+      portUnavailable(event.payload)
+    })
+    
+
 
 
     // ipcRenderer.sendSync('core-server-start');
@@ -90,6 +101,8 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       unlistenCommnad?.then((unlisten) => unlisten())
       unlistenDisconnect?.then((unlisten) => unlisten())
       unlistenCustomCommandRegister?.then((unlisten) => unlisten())
+      unlistenPortUnavailable?.then((unlisten) => unlisten())
+      unlistenDisconnect?.then((unlisten) => unlisten())
     }
   }, [
     serverStarted,
