@@ -123,6 +123,7 @@ pub fn start_server(app_handle: AppHandle) {
             handle.abort();
             app_handle.emit("stop", "stop").unwrap();
         }
+        app_handle.emit("start", "start").unwrap();
     }
 
     let handle = async_runtime::spawn(async move {
@@ -158,20 +159,20 @@ pub fn start_server(app_handle: AppHandle) {
                 let ws = Arc::new(TokioMutex::new(ws));
                 println!("WebSocket connection accepted from {}", addr);
 
-                // partialConnection 생성 및 저장
+                // Create and store partialConnection
                 let partial_connection = PartialConnection {
                     id: current_connection_id,
                     address: addr.to_string(),
                     socket: ws.clone(),
                 };
 
-                // partialConnections에 추가
+                // Add to partialConnections
                 {
                     let mut partials = partial_connections.lock().await;
                     partials.push(partial_connection.clone());
                 }
 
-                // connect 이벤트 발생
+                // Emit connect event
                 app_handle.emit("connect", &partial_connection).unwrap();
 
                 let mut current_client_id = None;
@@ -189,30 +190,66 @@ pub fn start_server(app_handle: AppHandle) {
                                 cmd.message_id = Some(message_id);
                                 cmd.connection_id = Some(current_connection_id);
 
+                                // Handle client.intro
                                 if cmd.r#type == "client.intro" {
-                                    let client_id = if let Some(id) = cmd.payload.get("clientId") {
-                                        id.as_str().unwrap().to_string()
-                                    } else {
-                                        Uuid::new_v4().to_string()
-                                    };
+                                    // Find partialConnection
+                                    let mut partials = partial_connections.lock().await;
+                                    let part_conn_opt = partials.iter().find(|c| c.id == current_connection_id).cloned();
 
+                                    // Add address to payload
+                                    if let Some(part_conn) = &part_conn_opt {
+                                        if let Some(payload) = cmd.payload.as_object_mut() {
+                                            payload.insert("address".to_string(), serde_json::Value::String(part_conn.address.clone()));
+                                        }
+                                    }
+
+                                    // Remove from partialConnections
+                                    partials.retain(|c| c.id != current_connection_id);
+
+                                    // Handle clientId
+                                    let mut client_id = cmd.payload.get("clientId").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                    if client_id.is_none() {
+                                        client_id = Some(Uuid::new_v4().to_string());
+                                        // Send clientId to client
+                                        let response = serde_json::json!({
+                                            "type": "setClientId",
+                                            "payload": client_id.as_ref().unwrap()
+                                        });
+                                        ws_guard.send(Message::Text(response.to_string().into())).await.unwrap();
+                                    } else {
+                                        // If a socket with the same clientId already exists, close and remove the old connection
+                                        let mut connections = client_connections.lock().await;
+                                        let existing = connections.iter()
+                                            .find(|(_, conn)| conn.client_id.as_str() == client_id.as_ref().unwrap())
+                                            .map(|(k, _)| k.clone());
+                                        if let Some(existing_key) = existing {
+                                            connections.remove(&existing_key);
+                                            // Optionally emit disconnect event
+                                        }
+                                    }
+
+                                    let client_id = client_id.unwrap();
                                     current_client_id = Some(client_id.clone());
                                     cmd.client_id = Some(client_id.clone());
 
+                                    // Create connection object and add to connections
                                     let mut connections = client_connections.lock().await;
-                                    connections.insert(client_id.clone(), ClientConnection {
+                                    let connection = ClientConnection {
                                         id: current_connection_id,
                                         address: addr.to_string(),
                                         client_id: client_id.clone(),
                                         socket: ws.clone(),
-                                    });
+                                    };
+                                    connections.insert(client_id.clone(), connection.clone());
 
-                                    // Send client ID back to client
-                                    let response = serde_json::json!({
-                                        "type": "setClientId",
-                                        "payload": client_id
-                                    });
-                                    ws_guard.send(Message::Text(response.to_string().into())).await.unwrap();
+                                    // Emit connectionEstablished event
+                                    app_handle.emit("connectionEstablished", &serde_json::json!({
+                                        "id": current_connection_id,
+                                        "address": addr.to_string(),
+                                        "clientId": client_id,
+                                        "payload": cmd.payload,
+                                        "diff": cmd.diff,
+                                    })).unwrap();
 
                                     // Send current subscriptions
                                     let subs = subscriptions.lock().await;
@@ -221,9 +258,14 @@ pub fn start_server(app_handle: AppHandle) {
                                         "payload": { "paths": *subs }
                                     });
                                     ws_guard.send(Message::Text(sub_response.to_string().into())).await.unwrap();
-                                    app_handle.emit("connectionEstablished", &cmd.payload).unwrap();
                                 }
 
+                                // For all messages, set client_id if current_client_id exists
+                                if let Some(client_id) = &current_client_id {
+                                    cmd.client_id = Some(client_id.clone());
+                                }
+
+                                // Handle state.values.change
                                 if cmd.r#type == "state.values.change" {
                                     if let Some(changes) = cmd.payload.get("changes") {
                                         if let Some(paths) = changes.as_array() {
@@ -239,6 +281,14 @@ pub fn start_server(app_handle: AppHandle) {
                                     }
                                 }
 
+                                // Handle state.backup.response
+                                if cmd.r#type == "state.backup.response" {
+                                    if let Some(payload) = cmd.payload.as_object_mut() {
+                                        payload.insert("name".to_string(), serde_json::Value::Null);
+                                    }
+                                }
+
+                                // Emit command event for all messages
                                 app_handle.emit("command", &cmd).unwrap();
                             } else {
                                 println!("Failed to parse command: {}", text);
@@ -249,7 +299,7 @@ pub fn start_server(app_handle: AppHandle) {
                     }
                 }
 
-                // 연결 종료 시 partialConnections에서 제거
+                // Remove from partialConnections on disconnect
                 {
                     let mut partials = partial_connections.lock().await;
                     partials.retain(|conn| conn.id != current_connection_id);
@@ -305,8 +355,13 @@ pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
     
     for (_, conn) in connections.iter() {
         if command.client_id.is_empty() || conn.client_id == command.client_id {
-            let command_json = serde_json::to_string(&command).unwrap();
-            let message = Message::Text(command_json.into());
+            // 원본 명령 형식 유지
+            let command_json = serde_json::json!({
+                "type": command.r#type,
+                "payload": command.payload,
+                "clientId": command.client_id
+            });
+            let message = Message::Text(command_json.to_string().into());
             let mut socket = conn.socket.lock().await;
             if let Err(e) = socket.send(message).await {
                 println!("Error sending message to client {}: {}", conn.client_id, e);
