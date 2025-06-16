@@ -50,15 +50,25 @@ pub struct ClientConnection {
     pub socket: Arc<TokioMutex<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PartialConnection {
+    pub id: u32,
+    pub address: String,
+    #[serde(skip)]
+    pub socket: Arc<TokioMutex<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>,
+}
+
 type ServerHandle = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
 type WsStream = Arc<TokioMutex<Option<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>>;
 type ClientConnections = Arc<TokioMutex<HashMap<String, ClientConnection>>>;
 type Subscriptions = Arc<TokioMutex<Vec<String>>>;
+type PartialConnections = Arc<TokioMutex<Vec<PartialConnection>>>;
 
 static mut SERVER_HANDLE: Option<ServerHandle> = None;
 static mut WS_STREAM: Option<WsStream> = None;
 static mut CLIENT_CONNECTIONS: Option<ClientConnections> = None;
 static mut SUBSCRIPTIONS: Option<Subscriptions> = None;
+static mut PARTIAL_CONNECTIONS: Option<PartialConnections> = None;
 
 pub fn get_server_handle() -> &'static ServerHandle {
     unsafe {
@@ -93,6 +103,15 @@ pub fn get_subscriptions() -> &'static Subscriptions {
             SUBSCRIPTIONS = Some(Arc::new(TokioMutex::new(Vec::new())));
         }
         SUBSCRIPTIONS.as_ref().unwrap()
+    }
+}
+
+pub fn get_partial_connections() -> &'static PartialConnections {
+    unsafe {
+        if PARTIAL_CONNECTIONS.is_none() {
+            PARTIAL_CONNECTIONS = Some(Arc::new(TokioMutex::new(Vec::new())));
+        }
+        PARTIAL_CONNECTIONS.as_ref().unwrap()
     }
 }
 
@@ -133,10 +152,27 @@ pub fn start_server(app_handle: AppHandle) {
                 let ws_stream = get_ws_stream();
                 let client_connections = get_client_connections();
                 let subscriptions = get_subscriptions();
+                let partial_connections = get_partial_connections();
                 
                 let ws = accept_async(stream).await.unwrap();
                 let ws = Arc::new(TokioMutex::new(ws));
                 println!("WebSocket connection accepted from {}", addr);
+
+                // partialConnection 생성 및 저장
+                let partial_connection = PartialConnection {
+                    id: current_connection_id,
+                    address: addr.to_string(),
+                    socket: ws.clone(),
+                };
+
+                // partialConnections에 추가
+                {
+                    let mut partials = partial_connections.lock().await;
+                    partials.push(partial_connection.clone());
+                }
+
+                // connect 이벤트 발생
+                app_handle.emit("connect", &partial_connection).unwrap();
 
                 let mut current_client_id = None;
 
@@ -213,6 +249,12 @@ pub fn start_server(app_handle: AppHandle) {
                     }
                 }
 
+                // 연결 종료 시 partialConnections에서 제거
+                {
+                    let mut partials = partial_connections.lock().await;
+                    partials.retain(|conn| conn.id != current_connection_id);
+                }
+
                 // Handle disconnection
                 if let Some(client_id) = current_client_id {
                     let mut connections = client_connections.lock().await;
@@ -240,6 +282,11 @@ pub async fn stop_server(app_handle: AppHandle) {
         let client_connections = get_client_connections();
         let mut connections = client_connections.lock().await;
         connections.clear();
+        
+        // Clean up partial connections
+        let partial_connections = get_partial_connections();
+        let mut partials = partial_connections.lock().await;
+        partials.clear();
         
         // Clear subscriptions
         let subscriptions = get_subscriptions();
