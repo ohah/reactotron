@@ -5,6 +5,7 @@ import ReactotronBrain from "../../ReactotronBrain"
 
 import useStandalone, { type Connection, type ServerStatus } from "./useStandalone"
 import { invoke } from "@tauri-apps/api/core"
+import repairSerialization from "../../util/repair-serialization"
 
 // TODO: Move up to better places like core somewhere!
 interface Context {
@@ -42,56 +43,37 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const unlistenStart = listen('start', (event) => {
-      console.log('start', event)
+      console.log('start', repairSerialization(event.payload))
       reactotronIsServerStarted.current = true
       serverStarted()
     })
     const unlistenStop = listen('stop', (event) => {
-      console.log('stop', event)
+      console.log('stop', repairSerialization(event.payload))
       reactotronIsServerStarted.current = false
       serverStopped()
     })
 
     const unlistenConnectionEstablished = listen('connectionEstablished', (event) => {
-      console.log('connectionEstablished', event)
-      connectionEstablished(event.payload)
+      console.log('connectionEstablished', repairSerialization(event.payload.payload))
+      connectionEstablished(repairSerialization(event.payload.payload))
     })
 
     const unlistenDisconnect = listen('disconnect', (event) => {
-      console.log('disconnect', event)
-      connectionDisconnected(event.payload)
-    })
-
-    const unlistenCustomCommandRegister = listen('portUnavailable', (event) => {
-      console.log('portUnavailable', event)
-      portUnavailable(event.payload)
-    })
-
-    const unlistenCommnad = listen('command', (event) => {
-      console.log('command', event)
-      commandReceived(event.payload)
-      // commandReceived(event.payload)
-      // } else if(event.payload.type === 'disconnect') {
-      //   connectionDisconnected(event.payload)
-      // } else if(event.payload.type === 'portUnavailable') {
-      //   portUnavailable(event.payload)
-      // }
-    })
-
-    const unlistenDisconnect = listen('disconnect', (event) => {
-      console.log('disconnect', event)
-      connectionDisconnected(event.payload)
+      console.log('disconnect', repairSerialization(event.payload))
+      connectionDisconnected(repairSerialization(event.payload))
     })
 
     const unlistenPortUnavailable = listen('portUnavailable', (event) => {
-      console.log('portUnavailable', event)
-      portUnavailable(event.payload)
+      console.log('portUnavailable', repairSerialization(event.payload))
+      portUnavailable()
     })
-    
 
+    const unlistenCommnad = listen('command', (event) => {
+      console.log('command', repairSerialization(event.payload))
+      commandReceived(repairSerialization(event.payload))
 
+    })
 
-    // ipcRenderer.sendSync('core-server-start');
     invoke('start_core_server')
     
     return () => {
@@ -100,7 +82,6 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       unlistenConnectionEstablished?.then((unlisten) => unlisten())
       unlistenCommnad?.then((unlisten) => unlisten())
       unlistenDisconnect?.then((unlisten) => unlisten())
-      unlistenCustomCommandRegister?.then((unlisten) => unlisten())
       unlistenPortUnavailable?.then((unlisten) => unlisten())
       unlistenDisconnect?.then((unlisten) => unlisten())
     }
@@ -116,7 +97,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const sendCommand = useCallback(
     (type: string, payload: any, clientId?: string) => {
       if(!reactotronIsServerStarted.current) return;
-      console.log('sendCommand', type, payload, clientId || selectedClientId)
+
       invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
     },
     [selectedClientId]
