@@ -40,11 +40,6 @@ export default function repairSerialization(payload: any) {
     const has = Object.prototype.hasOwnProperty.bind(obj) as (key: string) => boolean
     for (k in obj) {
       if (has(k)) {
-        // Convert date values to Date objects
-        if (k === 'date' && typeof obj[k] === 'string') {
-          obj[k] = new Date(obj[k])
-        }
-
         switch (typeof obj[k]) {
           // should we recurse thru sub-objects and arrays?
           case "object":
@@ -62,6 +57,10 @@ export default function repairSerialization(payload: any) {
                 obj[k] = obj[k].replace(/~~~/g, "")
               }
             }
+        }
+        // Convert date values to Date objects
+        if (k === 'date' && typeof obj[k] === 'string') {
+          obj[k] = new Date(obj[k])
         }
       }
     }
