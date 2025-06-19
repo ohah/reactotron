@@ -23,7 +23,7 @@ fn stop_core_server(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn send_command(
+async fn send_command(
     app: tauri::AppHandle, 
     r#type: String, 
     payload: serde_json::Value, 
@@ -33,9 +33,12 @@ fn send_command(
         r#type,
         payload,
         client_id,
+        important: false,
+        date: Some(chrono::Utc::now().to_rfc3339()),
+        delta_time: Some(0),
     };
     println!("send_command: {:?}", command);
-    reactotron_core_server::send_command(app, command);
+    reactotron_core_server::send_command(app, command).await;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
