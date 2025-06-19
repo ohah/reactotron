@@ -83,7 +83,6 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       unlistenCommnad?.then((unlisten) => unlisten())
       unlistenDisconnect?.then((unlisten) => unlisten())
       unlistenPortUnavailable?.then((unlisten) => unlisten())
-      unlistenDisconnect?.then((unlisten) => unlisten())
     }
   }, [
     serverStarted,
