@@ -11,6 +11,8 @@ interface Context {
   closeSearch: () => void
   search: string
   setSearch: (search: string) => void
+  exclude: string
+  setExclude: (exclude: string) => void
   isFilterOpen: boolean
   openFilter: () => void
   closeFilter: () => void
@@ -27,6 +29,8 @@ const TimelineContext = React.createContext<Context>({
   closeSearch: null,
   search: "",
   setSearch: null,
+  exclude: "",
+  setExclude: null,
   isFilterOpen: false,
   openFilter: null,
   closeFilter: null,
@@ -36,7 +40,7 @@ const TimelineContext = React.createContext<Context>({
   setHiddenCommands: null,
 })
 
-const Provider: FunctionComponent<any> = ({ children }) => {
+const Provider: FunctionComponent<{ children: React.ReactNode }> = ({ children }) => {
   const {
     isSearchOpen,
     toggleSearch,
@@ -44,6 +48,8 @@ const Provider: FunctionComponent<any> = ({ children }) => {
     closeSearch,
     search,
     setSearch,
+    exclude,
+    setExclude,
     isFilterOpen,
     openFilter,
     closeFilter,
@@ -62,6 +68,8 @@ const Provider: FunctionComponent<any> = ({ children }) => {
         closeSearch,
         search,
         setSearch,
+        exclude,
+        setExclude,
         isFilterOpen,
         openFilter,
         closeFilter,

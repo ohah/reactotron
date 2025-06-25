@@ -10,6 +10,7 @@ export enum StorageKey {
 interface TimelineState {
   isSearchOpen: boolean
   search: string
+  exclude: string
   isFilterOpen: boolean
   isReversed: boolean
   hiddenCommands: CommandTypeKey[]
@@ -19,6 +20,7 @@ enum TimelineActionType {
   SearchOpen = "SEARCH_OPEN",
   SearchClose = "SEARCH_CLOSE",
   SearchSet = "SEARCH_SET",
+  ExcludeSet = "EXCLUDE_SET",
   FilterOpen = "FILTER_OPEN",
   FilterClose = "FILTER_CLOSE",
   OrderReverse = "ORDER_REVERSE",
@@ -37,7 +39,7 @@ type Action =
         | TimelineActionType.OrderRegular
     }
   | {
-      type: TimelineActionType.SearchSet
+      type: TimelineActionType.SearchSet | TimelineActionType.ExcludeSet
       payload: string
     }
   | {
@@ -53,6 +55,8 @@ function timelineReducer(state: TimelineState, action: Action) {
       return { ...state, isSearchOpen: false }
     case TimelineActionType.SearchSet:
       return { ...state, search: action.payload }
+    case TimelineActionType.ExcludeSet:
+      return { ...state, exclude: action.payload }
     case TimelineActionType.FilterOpen:
       return { ...state, isFilterOpen: true }
     case TimelineActionType.FilterClose:
@@ -72,6 +76,7 @@ function useTimeline() {
   const [state, dispatch] = useReducer(timelineReducer, {
     isSearchOpen: false,
     search: "",
+    exclude: "",
     isFilterOpen: false,
     isReversed: false,
     hiddenCommands: [],
@@ -118,6 +123,13 @@ function useTimeline() {
     })
   }
 
+  const setExclude = (exclude: string) => {
+    dispatch({
+      type: TimelineActionType.ExcludeSet,
+      payload: exclude,
+    })
+  }
+
   const openFilter = () => {
     dispatch({
       type: TimelineActionType.FilterOpen,
@@ -156,6 +168,8 @@ function useTimeline() {
     closeSearch,
     search: state.search,
     setSearch,
+    exclude: state.exclude,
+    setExclude,
     isFilterOpen: state.isFilterOpen,
     openFilter,
     closeFilter,

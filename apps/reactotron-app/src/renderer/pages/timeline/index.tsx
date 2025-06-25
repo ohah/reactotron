@@ -90,6 +90,8 @@ function Timeline() {
     closeSearch,
     setSearch,
     search,
+    exclude,
+    setExclude,
     isReversed,
     toggleReverse,
     openFilter,
@@ -99,19 +101,19 @@ function Timeline() {
     setHiddenCommands,
   } = useContext(TimelineContext)
 
-  let filteredCommands
+  let filteredCommands: unknown[] = []
   try {
-    filteredCommands = filterCommands(commands, search, hiddenCommands)
+    filteredCommands = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
   } catch (error) {
     console.error(error)
-    filteredCommands = commands
+    filteredCommands = commands || []
   }
 
   if (isReversed) {
     filteredCommands = filteredCommands.reverse()
   }
 
-  const dispatchAction = (action: any) => {
+  const dispatchAction = (action: unknown) => {
     sendCommand("state.action.dispatch", { action })
   }
 
@@ -128,6 +130,7 @@ function Timeline() {
   }
 
   const { searchString, handleInputChange } = useDebouncedSearchInput(search, setSearch, 300)
+  const { searchString: excludeString, handleInputChange: handleExcludeInputChange } = useDebouncedSearchInput(exclude, setExclude, 300)
 
   return (
     <Container>
@@ -176,12 +179,15 @@ function Timeline() {
           <SearchContainer>
             <SearchLabel>Search</SearchLabel>
             <SearchInput autoFocus value={searchString} onChange={handleInputChange} />
+            <SearchLabel>Exclude</SearchLabel>
+            <SearchInput value={excludeString} onChange={handleExcludeInputChange} />
             <ButtonContainer
               onClick={() => {
-                if (search === "") {
+                if (search === "" && exclude === "") {
                   closeSearch()
                 } else {
                   setSearch("")
+                  setExclude("")
                 }
               }}
             >
@@ -203,7 +209,7 @@ function Timeline() {
             <RandomJoke />
           </EmptyState>
         ) : (
-          filteredCommands.map((command) => {
+          filteredCommands.map((command:any) => {
             const CommandComponent = timelineCommandResolver(command.type)
 
             if (CommandComponent) {
@@ -247,11 +253,19 @@ export default Timeline
 
 const useDebouncedSearchInput = (
   initialValue: string,
-  setSearch: (search: string) => void,
+  setSearch: ((search: string) => void) | null,
   delay: number = 300
 ) => {
   const [searchString, setSearchString] = React.useState<string>(initialValue)
-  const debouncedOnChange = useMemo(() => debounce(setSearch, delay), [delay, setSearch])
+  
+  // Provide a fallback function if setSearch is null
+  const safeSetSearch = useCallback((value: string) => {
+    if (setSearch) {
+      setSearch(value)
+    }
+  }, [setSearch])
+  
+  const debouncedOnChange = useMemo(() => debounce(safeSetSearch, delay), [delay, safeSetSearch])
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
