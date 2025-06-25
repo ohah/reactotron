@@ -135,7 +135,7 @@ function KeybindHandler({ children }) {
       try {
         const webviewWindow = getCurrentWebviewWindow()
         const currentZoom = currentZoomRef.current
-        const newZoom = currentZoom - 0.1
+        const newZoom = Math.max(currentZoom - 0.1, 0.1)
         await webviewWindow.setZoom(newZoom)
         currentZoomRef.current = newZoom
       } catch (error) {
