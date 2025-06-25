@@ -68,6 +68,7 @@ function highlightText(text: string, searchTerm: string) {
   const parts = text.split(regex)
   let keyCounter = 0
   return parts.map((part) => {
+    regex.lastIndex = 0 // Reset lastIndex before each test
     if (regex.test(part)) {
       keyCounter++
       return <HighlightedText key={`highlight-${text}-${keyCounter}-${part}`}>{part}</HighlightedText>
@@ -84,7 +85,7 @@ const getTreeTheme = (baseTheme: ReactotronTheme) => ({
 
 interface Props {
   // value: object
-  value: any
+  value: unknown
   level?: number
   searchTerm?: string
 }
@@ -103,7 +104,7 @@ export default function TreeView({ value, level = 1, searchTerm = "" }: Props) {
     return <span>{text}</span>
   }
 
-  const valueRenderer = (transformed: any, untransformed: any) => {
+  const valueRenderer = (transformed: unknown, untransformed: unknown) => {
     const text = `${untransformed || transformed}`
     return <span>{text}</span>
   }
