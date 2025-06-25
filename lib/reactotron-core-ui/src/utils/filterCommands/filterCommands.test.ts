@@ -1,4 +1,4 @@
-import filterCommands, { filterSearch, filterHidden } from "./index"
+import filterCommands, { filterSearch, filterExclude, filterHidden } from "./index"
 import { CommandType } from "reactotron-core-contract"
 
 const TEST_COMMANDS = [
@@ -215,6 +215,23 @@ describe("utils/filterCommands", () => {
     })
   })
 
+  describe("filterExclude", () => {
+    it("should exclude commands that match the exclude pattern", () => {
+      const result = filterExclude(TEST_COMMANDS, "SEARCHTYPE")
+      expect(result).toEqual(TEST_COMMANDS.filter((tc) => tc.type !== "SEARCHTYPE"))
+    })
+
+    it("should exclude commands that match the exclude pattern in payload", () => {
+      const result = filterExclude(TEST_COMMANDS, "SEARCHMESSAGE")
+      expect(result).toEqual(TEST_COMMANDS.filter((tc) => !tc.payload?.message?.includes("SEARCHMESSAGE")))
+    })
+
+    it("should return all commands when exclude is empty", () => {
+      const result = filterExclude(TEST_COMMANDS, "")
+      expect(result).toEqual(TEST_COMMANDS)
+    })
+  })
+
   describe("filterHidden", () => {
     it("should filter out only command types that are in the list", () => {
       const result = filterHidden(TEST_COMMANDS, [CommandType.ClientIntro])
@@ -226,16 +243,23 @@ describe("utils/filterCommands", () => {
   describe("filterCommands", () => {
     TESTS.forEach((test) => {
       it(`should search in '${test.name}'`, () => {
-        const result = filterCommands(TEST_COMMANDS, test.search, [])
+        const result = filterCommands(TEST_COMMANDS, test.search, "", [])
 
         expect(result).toEqual(test.result)
       })
     })
 
     it("should filter out only command types that are in the list", () => {
-      const result = filterCommands(TEST_COMMANDS, "", [CommandType.ClientIntro])
+      const result = filterCommands(TEST_COMMANDS, "", "", [CommandType.ClientIntro])
 
       expect(result).toEqual(TEST_COMMANDS.filter((tc) => tc.type !== CommandType.ClientIntro))
+    })
+
+    it("should apply both search and exclude filters", () => {
+      const result = filterCommands(TEST_COMMANDS, "ADUMMYOBJ", "SEARCHMESSAGE", [])
+      expect(result).toEqual(TEST_COMMANDS.filter((tc) => 
+        tc.type === "ADUMMYOBJ" && !tc.payload?.message?.includes("SEARCHMESSAGE")
+      ))
     })
   })
 })
