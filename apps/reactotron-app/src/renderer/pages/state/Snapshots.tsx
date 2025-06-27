@@ -1,5 +1,4 @@
 import React, { useContext, useState } from "react"
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import {
   ContentView,
   SnapshotRenameModal,
@@ -9,6 +8,7 @@ import {
   Tooltip,
 } from "reactotron-core-ui"
 import type { Snapshot } from "reactotron-core-ui"
+import { clipboard } from "electron"
 import styled from "styled-components"
 import {
   MdCreate,
@@ -83,7 +83,7 @@ function SnapshotItem({
           data-for="copy-to-clipboard"
           onClick={(e) => {
             e.stopPropagation()
-            writeText(JSON.stringify(snapshot))
+            clipboard.writeText(JSON.stringify(snapshot))
           }}
         >
           <MdCallReceived size={24} />
@@ -172,7 +172,7 @@ function Snapshots() {
             tip: "Copy all snapshots to clipboard",
             icon: MdCallReceived,
             onClick: () => {
-              writeText(JSON.stringify(snapshots))
+              clipboard.writeText(JSON.stringify(snapshots))
             },
           },
           {

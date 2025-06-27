@@ -18,8 +18,8 @@ interface Props {
   addCommandListener: (callback: (command: Command) => void) => void
 }
 
-/** Wrapper for Reactauri context providers */
-const ReactauriBrain: FunctionComponent<PropsWithChildren<Props>> = ({
+/** Wrapper for Reactotron context providers */
+const ReactotronBrain: FunctionComponent<PropsWithChildren<Props>> = ({
   commands,
   sendCommand,
   clearCommands,
@@ -46,4 +46,4 @@ const ReactauriBrain: FunctionComponent<PropsWithChildren<Props>> = ({
   )
 }
 
-export default ReactauriBrain
+export default ReactotronBrain

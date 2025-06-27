@@ -1,4 +1,5 @@
 import React from "react"
+import { ipcRenderer } from "electron"
 import styled from "styled-components"
 import { GoGear as SettingsIcon } from "react-icons/go"
 import { MdCompareArrows as ReverseTunnelIcon } from "react-icons/md"
@@ -7,7 +8,6 @@ import { IoReloadOutline as ReloadAppIcon } from "react-icons/io5"
 import { EmptyState, Tooltip } from "reactotron-core-ui"
 import { FaAndroid } from "react-icons/fa"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
-import { ipcRenderer } from "../../../util/ipc"
 
 const Container = styled.div`
   margin: 50px 0px;
@@ -108,22 +108,22 @@ function AndroidDeviceHelp() {
 
   // When the page loads, get the list of devices from ADB to help users debug android issues.
   React.useEffect(() => {
-    // ipcRenderer.on("device-list", (_event, arg) => {
-    //   arg = arg.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
-    //   const rawDevices = arg.split("\n")
-    //   rawDevices.shift() // Remove the first line
-    //   const devices = rawDevices.map((device) => {
-    //     const [id, state] = device.split("\t")
-    //     return { id, state }
-    //   })
-    //   setAndroidDevices(devices)
-    // })
+    ipcRenderer.on("device-list", (_event, arg) => {
+      arg = arg.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
+      const rawDevices = arg.split("\n")
+      rawDevices.shift() // Remove the first line
+      const devices = rawDevices.map((device) => {
+        const [id, state] = device.split("\t")
+        return { id, state }
+      })
+      setAndroidDevices(devices)
+    })
 
-    // ipcRenderer.send("get-device-list")
+    ipcRenderer.send("get-device-list")
 
-    // return () => {
-    //   ipcRenderer.removeAllListeners("device-list")
-    // }
+    return () => {
+      ipcRenderer.removeAllListeners("device-list")
+    }
   }, [])
 
   const TitleComponent = React.useCallback(() => {

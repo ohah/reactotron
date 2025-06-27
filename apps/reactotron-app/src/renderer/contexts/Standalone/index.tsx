@@ -1,11 +1,10 @@
 import React, { useRef, useEffect, useCallback } from "react"
-import { listen } from '@tauri-apps/api/event'
+import Server, { createServer } from "reactotron-core-server"
 
 import ReactotronBrain from "../../ReactotronBrain"
+import config from "../../config"
 
-import useStandalone, { type Connection, type ServerStatus } from "./useStandalone"
-import { invoke } from "@tauri-apps/api/core"
-import repairSerialization from "../../util/repair-serialization"
+import useStandalone, { Connection, ServerStatus } from "./useStandalone"
 
 // TODO: Move up to better places like core somewhere!
 interface Context {
@@ -23,7 +22,7 @@ const StandaloneContext = React.createContext<Context>({
 })
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const reactotronIsServerStarted = useRef<boolean>(false)
+  const reactotronServer = useRef<Server>(null)
 
   const {
     serverStatus,
@@ -42,47 +41,21 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   } = useStandalone()
 
   useEffect(() => {
-    const unlistenStart = listen('start', (event) => {
-      console.log('start', repairSerialization(event.payload))
-      reactotronIsServerStarted.current = true
-      serverStarted()
-    })
-    const unlistenStop = listen('stop', (event) => {
-      console.log('stop', repairSerialization(event.payload))
-      reactotronIsServerStarted.current = false
-      serverStopped()
-    })
+    reactotronServer.current = createServer({ port: config.get("serverPort") as number })
 
-    const unlistenConnectionEstablished = listen('connectionEstablished', (event) => {
-      console.log('connectionEstablished', repairSerialization(event.payload.payload))
-      connectionEstablished(repairSerialization(event.payload.payload))
-    })
+    reactotronServer.current.on("start", serverStarted)
+    reactotronServer.current.on("stop", serverStopped)
+    // @ts-expect-error need to sync these types between reactotron-core-server and reactotron-app
+    reactotronServer.current.on("connectionEstablished", connectionEstablished)
+    reactotronServer.current.on("command", commandReceived)
+    // @ts-expect-error need to sync these types between reactotron-core-server and reactotron-app
+    reactotronServer.current.on("disconnect", connectionDisconnected)
+    reactotronServer.current.on("portUnavailable", portUnavailable)
 
-    const unlistenDisconnect = listen('disconnect', (event) => {
-      console.log('disconnect', repairSerialization(event.payload))
-      connectionDisconnected(repairSerialization(event.payload))
-    })
+    reactotronServer.current.start()
 
-    const unlistenPortUnavailable = listen('portUnavailable', (event) => {
-      console.log('portUnavailable', repairSerialization(event.payload))
-      portUnavailable()
-    })
-
-    const unlistenCommnad = listen('command', (event) => {
-      console.log('command', repairSerialization(event.payload))
-      commandReceived(repairSerialization(event.payload))
-
-    })
-
-    invoke('start_core_server')
-    
     return () => {
-      unlistenStart?.then((unlisten) => unlisten())
-      unlistenStop?.then((unlisten) => unlisten())
-      unlistenConnectionEstablished?.then((unlisten) => unlisten())
-      unlistenCommnad?.then((unlisten) => unlisten())
-      unlistenDisconnect?.then((unlisten) => unlisten())
-      unlistenPortUnavailable?.then((unlisten) => unlisten())
+      reactotronServer.current.stop()
     }
   }, [
     serverStarted,
@@ -95,11 +68,12 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const sendCommand = useCallback(
     (type: string, payload: any, clientId?: string) => {
-      if(!reactotronIsServerStarted.current) return;
+      // TODO: Do better then just throwing these away...
+      if (!reactotronServer.current) return
 
-      invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
+      reactotronServer.current.send(type, payload, clientId || selectedClientId)
     },
-    [selectedClientId]
+    [reactotronServer, selectedClientId]
   )
 
   return (
