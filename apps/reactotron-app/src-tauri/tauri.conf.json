@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "reactotron",
+  "productName": "reactauri",
   "version": "0.1.0",
-  "identifier": "com.reactotron.app",
+  "identifier": "com.reactauri.app",
   "build": {
     "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:3333",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "reactotron",
+        "title": "reactauri",
         "width": 800,
         "height": 700
       }

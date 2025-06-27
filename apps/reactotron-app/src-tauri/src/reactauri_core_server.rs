@@ -126,6 +126,7 @@ pub fn start_server(app_handle: AppHandle) {
     {
         let mut guard = server_handle.lock().unwrap();
         if let Some(handle) = guard.take() {
+            println!("Stopping server");
             handle.abort();
             app_handle.emit("stop", "stop").unwrap();
         }
@@ -136,7 +137,7 @@ pub fn start_server(app_handle: AppHandle) {
         let listener = match TcpListener::bind("0.0.0.0:9090").await {
             Ok(listener) => listener,
             Err(e) => {
-                if e.to_string().contains("EADDRINUSE") {
+                if e.kind() == std::io::ErrorKind::AddrInUse || e.to_string().contains("EADDRINUSE") {
                     app_handle.emit("portUnavailable", 9090).unwrap();
                 } else {
                     println!("Error starting server: {}", e);
@@ -379,11 +380,20 @@ pub fn start_server(app_handle: AppHandle) {
 }
 
 pub async fn stop_server(app_handle: AppHandle) {
+    println!("Stopping server");
     let server_handle = get_server_handle();
-    let mut guard = server_handle.lock().unwrap();
     
-    if let Some(handle) = guard.take() {
+    let handle = {
+        let mut guard = server_handle.lock().unwrap();
+        guard.take()
+    };
+    
+    if let Some(handle) = handle {
         handle.abort();
+        
+        // Wait for server to stop
+        let _ = handle.await;
+        
         println!("WebSocket server stopped: ws://0.0.0.0:9090");
         
         // Clean up client connections

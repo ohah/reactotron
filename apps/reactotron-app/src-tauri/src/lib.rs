@@ -3,7 +3,7 @@
     windows_subsystem = "windows"
 )]
 
-mod reactotron_core_server;
+mod reactauri_core_server;
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -14,12 +14,12 @@ use tauri::Manager;
 
 #[tauri::command]
 fn start_core_server(app: tauri::AppHandle) {
-    reactotron_core_server::start_server(app);
+    reactauri_core_server::start_server(app);
 }
 
 #[tauri::command]
 fn stop_core_server(app: tauri::AppHandle) {
-    reactotron_core_server::stop_server(app);
+    reactauri_core_server::stop_server(app);
 }
 
 #[tauri::command]
@@ -29,7 +29,7 @@ async fn send_command(
     payload: serde_json::Value, 
     client_id: String
 ) {
-    let command = reactotron_core_server::CommandWithClientId {
+    let command = reactauri_core_server::CommandWithClientId {
         r#type,
         payload,
         client_id,
@@ -38,7 +38,7 @@ async fn send_command(
         delta_time: Some(0),
     };
     println!("send_command: {:?}", command);
-    reactotron_core_server::send_command(app, command).await;
+    reactauri_core_server::send_command(app, command).await;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    reactotron_lib::run()
+    reactauri_lib::run()
 }

@@ -12,7 +12,7 @@ import { FaMagic } from "react-icons/fa"
 import styled from "styled-components"
 
 import SideBarButton from "../SideBarButton"
-import { reactotronLogo } from "../../images"
+import { reactauriLogo } from "../../images"
 import { ServerStatus } from "../../contexts/Standalone/useStandalone"
 
 interface SideBarContainerProps {
@@ -56,7 +56,7 @@ function SideBar({ isOpen, serverStatus }: { isOpen: boolean; serverStatus: Serv
 
   return (
     <SideBarContainer $isOpen={isOpen}>
-      <SideBarButton image={reactotronLogo} path="/" text="Home" hideTopBar />
+      <SideBarButton image={reactauriLogo} path="/" text="Home" hideTopBar />
       <SideBarButton icon={MdReorder} path="/timeline" text="Timeline" />
       <SideBarButton
         icon={MdAssignment}

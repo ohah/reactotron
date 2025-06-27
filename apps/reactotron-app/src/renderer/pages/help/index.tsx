@@ -10,7 +10,7 @@ import { FaTwitter as TwitterIcon } from "react-icons/fa"
 import { getApplicationKeyMap } from "react-hotkeys"
 import { ItemContainer, ItemIconContainer } from "./SharedStyles"
 import KeybindGroup from "./components/KeybindGroup"
-import { reactotronLogo } from "../../images"
+import { reactauriLogo } from "../../images"
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 const projectJson = require("../../../../package.json")
@@ -87,10 +87,10 @@ function Keybinds() {
 function Help() {
   return (
     <Container>
-      <Header title={`Using Reactotron ${projectJson.version}`} isDraggable />
+      <Header title={`Using Reactauri ${projectJson.version}`} isDraggable />
       <HelpContainer>
         <LogoContainer>
-          <LogoImage src={reactotronLogo} />
+          <LogoImage src={reactauriLogo} />
         </LogoContainer>
         <Title>Let&apos;s Connect!</Title>
         <ConnectContainer>
