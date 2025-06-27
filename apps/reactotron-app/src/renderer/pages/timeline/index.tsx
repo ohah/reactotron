@@ -1,6 +1,8 @@
 import React, { useCallback, useContext, useMemo } from "react"
-import * as path from '@tauri-apps/api/path';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { clipboard, shell } from "electron"
+import fs from "fs"
+import os from "os"
+import path from "path"
 import debounce from "lodash.debounce"
 import {
   Header,
@@ -22,8 +24,6 @@ import {
 } from "react-icons/md"
 import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const Container = styled.div`
   display: flex;
@@ -90,8 +90,6 @@ function Timeline() {
     closeSearch,
     setSearch,
     search,
-    exclude,
-    setExclude,
     isReversed,
     toggleReverse,
     openFilter,
@@ -101,36 +99,38 @@ function Timeline() {
     setHiddenCommands,
   } = useContext(TimelineContext)
 
-  let filteredCommands: unknown[] = []
+  let filteredCommands
   try {
-    filteredCommands = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
+    filteredCommands = filterCommands(commands, search, hiddenCommands)
   } catch (error) {
     console.error(error)
-    filteredCommands = commands || []
+    filteredCommands = commands
   }
 
   if (isReversed) {
     filteredCommands = filteredCommands.reverse()
   }
 
-  const dispatchAction = (action: unknown) => {
+  const dispatchAction = (action: any) => {
     sendCommand("state.action.dispatch", { action })
   }
 
   function openDocs() {
-    openUrl("https://docs.infinite.red/reactotron/quick-start/react-native/")
+    shell.openExternal("https://docs.infinite.red/reactotron/quick-start/react-native/")
   }
 
-  async function downloadLog() {
-    const homeDir = await path.homeDir();
-    const downloadDir = await path.join(homeDir, "Downloads")
-    const filePath = await path.join(downloadDir, `timeline-log-${Date.now()}.json`)  
-    await writeTextFile(filePath, JSON.stringify(commands || []))
+  function downloadLog() {
+    const homeDir = os.homedir()
+    const downloadDir = path.join(homeDir, "Downloads")
+    fs.writeFileSync(
+      path.resolve(downloadDir, `timeline-log-${Date.now()}.json`),
+      JSON.stringify(commands || []),
+      "utf8"
+    )
     console.log(`Exported timeline log to ${downloadDir}`)
   }
 
   const { searchString, handleInputChange } = useDebouncedSearchInput(search, setSearch, 300)
-  const { searchString: excludeString, handleInputChange: handleExcludeInputChange } = useDebouncedSearchInput(exclude, setExclude, 300)
 
   return (
     <Container>
@@ -179,15 +179,12 @@ function Timeline() {
           <SearchContainer>
             <SearchLabel>Search</SearchLabel>
             <SearchInput autoFocus value={searchString} onChange={handleInputChange} />
-            <SearchLabel>Exclude</SearchLabel>
-            <SearchInput value={excludeString} onChange={handleExcludeInputChange} />
             <ButtonContainer
               onClick={() => {
-                if (search === "" && exclude === "") {
+                if (search === "") {
                   closeSearch()
                 } else {
                   setSearch("")
-                  setExclude("")
                 }
               }}
             >
@@ -209,7 +206,7 @@ function Timeline() {
             <RandomJoke />
           </EmptyState>
         ) : (
-          filteredCommands.map((command:any) => {
+          filteredCommands.map((command) => {
             const CommandComponent = timelineCommandResolver(command.type)
 
             if (CommandComponent) {
@@ -217,14 +214,14 @@ function Timeline() {
                 <CommandComponent
                   key={command.messageId}
                   command={command}
-                  copyToClipboard={writeText}
-                  readFile={async (filePath) => {
-                    try {
-                      const data = await readTextFile(filePath)
-                      return data
-                    } catch (err) {
-                      throw new Error("Something failed")
-                    }
+                  copyToClipboard={clipboard.writeText}
+                  readFile={(path) => {
+                    return new Promise((resolve, reject) => {
+                      fs.readFile(path, "utf-8", (err, data) => {
+                        if (err || !data) reject(new Error("Something failed"))
+                        else resolve(data)
+                      })
+                    })
                   }}
                   sendCommand={sendCommand}
                   dispatchAction={dispatchAction}
@@ -253,19 +250,11 @@ export default Timeline
 
 const useDebouncedSearchInput = (
   initialValue: string,
-  setSearch: ((search: string) => void) | null,
+  setSearch: (search: string) => void,
   delay: number = 300
 ) => {
   const [searchString, setSearchString] = React.useState<string>(initialValue)
-  
-  // Provide a fallback function if setSearch is null
-  const safeSetSearch = useCallback((value: string) => {
-    if (setSearch) {
-      setSearch(value)
-    }
-  }, [setSearch])
-  
-  const debouncedOnChange = useMemo(() => debounce(safeSetSearch, delay), [delay, safeSetSearch])
+  const debouncedOnChange = useMemo(() => debounce(setSearch, delay), [delay, setSearch])
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

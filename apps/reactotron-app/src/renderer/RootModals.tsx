@@ -5,9 +5,7 @@ import {
   ReactotronContext,
   StateContext,
 } from "reactotron-core-ui"
-import { platform as osPlatform } from '@tauri-apps/plugin-os';
 
-const platform = window?.process?.platform || osPlatform();
 function RootModals() {
   const {
     sendCommand,
@@ -35,7 +33,7 @@ function RootModals() {
           closeDispatchModal()
         }}
         onDispatchAction={dispatchAction}
-        isDarwin={["darwin", "macos"].includes(platform)}
+        isDarwin={window.process.platform === "darwin"}
       />
       <SubscriptionAddModal
         isOpen={isSubscriptionModalOpen}

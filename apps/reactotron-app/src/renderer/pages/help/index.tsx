@@ -1,4 +1,5 @@
 import React from "react"
+import { shell } from "electron"
 import { Header } from "reactotron-core-ui"
 import styled from "styled-components"
 import {
@@ -10,8 +11,7 @@ import { FaTwitter as TwitterIcon } from "react-icons/fa"
 import { getApplicationKeyMap } from "react-hotkeys"
 import { ItemContainer, ItemIconContainer } from "./SharedStyles"
 import KeybindGroup from "./components/KeybindGroup"
-import { reactauriLogo } from "../../images"
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { reactotronLogo } from "../../images"
 
 const projectJson = require("../../../../package.json")
 
@@ -48,19 +48,19 @@ const ConnectContainer = styled.div`
 `
 
 function openRepo() {
-  openUrl("https://github.com/infinitered/reactotron")
+  shell.openExternal("https://github.com/infinitered/reactotron")
 }
 
 function openFeedback() {
-  openUrl("https://github.com/infinitered/reactotron/issues/new")
+  shell.openExternal("https://github.com/infinitered/reactotron/issues/new")
 }
 
 function openUpdates() {
-  openUrl("https://github.com/infinitered/reactotron/releases")
+  shell.openExternal("https://github.com/infinitered/reactotron/releases")
 }
 
 function openTwitter() {
-  openUrl("https://twitter.com/reactotron")
+  shell.openExternal("https://twitter.com/reactotron")
 }
 
 function Keybinds() {
@@ -87,10 +87,10 @@ function Keybinds() {
 function Help() {
   return (
     <Container>
-      <Header title={`Using Reactauri ${projectJson.version}`} isDraggable />
+      <Header title={`Using Reactotron ${projectJson.version}`} isDraggable />
       <HelpContainer>
         <LogoContainer>
-          <LogoImage src={reactauriLogo} />
+          <LogoImage src={reactotronLogo} />
         </LogoContainer>
         <Title>Let&apos;s Connect!</Title>
         <ConnectContainer>

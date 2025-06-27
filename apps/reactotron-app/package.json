@@ -1,8 +1,8 @@
 {
-  "name": "reactauri-app",
-  "productName": "Reactauri",
+  "name": "reactotron-app",
+  "productName": "Reactotron",
   "version": "3.7.8",
-  "description": "Reactauri desktop mode engage!",
+  "description": "Reactotron desktop mode engage!",
   "author": {
     "name": "Infinite Red",
     "email": "hello@infinite.red",
@@ -20,8 +20,9 @@
   "homepage": "https://github.com/infinitered/reactotron#readme",
   "scripts": {
     "compile": "tsc",
+    "start": "electron-webpack dev",
     "clean": "rimraf ./dist",
-    "build": "rspack build -c ./rspack.config.renderer.ts && rspack build -c ./rspack.config.main.ts",
+    "build": "electron-webpack",
     "build:release": "node scripts/build.release.js",
     "release:artifacts": "node scripts/release.artifacts.js",
     "test": "jest",
@@ -32,10 +33,6 @@
     "lint": "eslint 'src/**/**.{ts,tsx}'",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook",
-    "dev": "cross-env TAURI_ENV=true rspack serve -c ./rspack.config.renderer.ts",
-    "tauri": "tauri",
-    "start": "rspack serve -c ./rspack.config.renderer.ts",
-    "main": "rspack build -c ./rspack.config.main.ts",
     "typecheck": "tsc --noEmit",
     "ci:test": "yarn test --runInBand"
   },
@@ -54,12 +51,6 @@
     }
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-clipboard-manager": "~2",
-    "@tauri-apps/plugin-fs": "~2",
-    "@tauri-apps/plugin-opener": "~2",
-    "@tauri-apps/plugin-os": "~2",
-    "@tauri-apps/plugin-store": "~2",
     "electron-log": "^5.0.0",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.7",
@@ -77,22 +68,20 @@
     "reactotron-core-contract": "workspace:*",
     "reactotron-core-server": "workspace:*",
     "reactotron-core-ui": "workspace:*",
-    "styled-components": "^6.1.0"
+    "source-map-support": "^0.5.21",
+    "styled-components": "^6.1.0",
+    "v8-compile-cache": "^2.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.2",
     "@babel/preset-react": "^7.22.15",
     "@babel/preset-typescript": "^7.23.2",
     "@electron/notarize": "^2.1.0",
-    "@rspack/cli": "^1.3.10",
-    "@rspack/core": "^1.3.10",
-    "@rspack/plugin-react-refresh": "^1.4.3",
     "@storybook/addon-actions": "^5.2.8",
     "@storybook/addon-knobs": "^5.2.8",
     "@storybook/addon-links": "^5.2.8",
     "@storybook/addons": "^5.2.8",
     "@storybook/react": "^5.2.8",
-    "@tauri-apps/cli": "^2",
     "@testing-library/react": "^14.1.2",
     "@types/jest": "^29.5.7",
     "@types/react": "18.2.45",
@@ -100,7 +89,6 @@
     "@typescript-eslint/eslint-plugin": "^6.7.5",
     "@typescript-eslint/parser": "^6.7.5",
     "babel-loader": "^8.3.0",
-    "cross-env": "^7.0.3",
     "electron": "27.0.3",
     "electron-builder": "^24.8.1",
     "electron-webpack": "2.8.2",
@@ -117,16 +105,14 @@
     "jest-environment-jsdom": "^29.7.0",
     "mime": "^3.0.0",
     "prettier": "^3.0.3",
-    "react-refresh": "^0.17.0",
     "react-test-renderer": "18.2.0",
     "rimraf": "^5.0.5",
     "ts-jest": "^29.1.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^4.9.5"
   },
   "build": {
-    "productName": "Reactauri",
-    "appId": "com.reactauri.app",
+    "productName": "Reactotron",
+    "appId": "com.reactotron.app",
     "files": [
       "src/dist/",
       "src/app.html",
