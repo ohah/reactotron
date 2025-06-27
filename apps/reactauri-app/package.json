@@ -21,7 +21,7 @@
   "scripts": {
     "compile": "tsc",
     "clean": "rimraf ./dist",
-    "build": "rspack build -c ./rspack.config.renderer.ts && rspack build -c ./rspack.config.main.ts",
+    "build": "rspack build -c ./rspack.config.renderer.ts",
     "build:release": "node scripts/build.release.js",
     "release:artifacts": "node scripts/release.artifacts.js",
     "test": "jest",
@@ -32,26 +32,11 @@
     "lint": "eslint 'src/**/**.{ts,tsx}'",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook",
-    "dev": "cross-env TAURI_ENV=true rspack serve -c ./rspack.config.renderer.ts",
+    "dev": "rspack serve -c ./rspack.config.renderer.ts",
     "tauri": "tauri",
     "start": "rspack serve -c ./rspack.config.renderer.ts",
-    "main": "rspack build -c ./rspack.config.main.ts",
     "typecheck": "tsc --noEmit",
     "ci:test": "yarn test --runInBand"
-  },
-  "electronWebpack": {
-    "whiteListedModules": [
-      "reactotron-core-ui",
-      "react-router-dom",
-      "styled-components"
-    ],
-    "renderer": {
-      "webpackConfig": "webpack.config.js",
-      "webpackDllConfig": "webpack.config.js"
-    },
-    "main": {
-      "webpackConfig": "webpack.config.js"
-    }
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -60,10 +45,6 @@
     "@tauri-apps/plugin-opener": "~2",
     "@tauri-apps/plugin-os": "~2",
     "@tauri-apps/plugin-store": "~2",
-    "electron-log": "^5.0.0",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.7",
-    "electron-window-state": "^5.0.3",
     "immer": "^10.0.3",
     "lodash.debounce": "^4.0.8",
     "react": "18.2.0",
@@ -75,15 +56,10 @@
     "react-router-dom": "^6.18.0",
     "react-tooltip": "4.5.1",
     "reactotron-core-contract": "workspace:*",
-    "reactotron-core-server": "workspace:*",
     "reactotron-core-ui": "workspace:*",
     "styled-components": "^6.1.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.2",
-    "@babel/preset-react": "^7.22.15",
-    "@babel/preset-typescript": "^7.23.2",
-    "@electron/notarize": "^2.1.0",
     "@rspack/cli": "^1.3.10",
     "@rspack/core": "^1.3.10",
     "@rspack/plugin-react-refresh": "^1.4.3",
@@ -99,11 +75,7 @@
     "@types/react-dom": "18.2.14",
     "@typescript-eslint/eslint-plugin": "^6.7.5",
     "@typescript-eslint/parser": "^6.7.5",
-    "babel-loader": "^8.3.0",
     "cross-env": "^7.0.3",
-    "electron": "27.0.3",
-    "electron-builder": "^24.8.1",
-    "electron-webpack": "2.8.2",
     "eslint": "^8.53.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-config-standard": "^17.1.0",
@@ -199,10 +171,7 @@
     "settings": {
       "react": {
         "version": "detect"
-      },
-      "import/core-modules": [
-        "electron"
-      ]
+      }
     },
     "parserOptions": {
       "ecmaFeatures": {
