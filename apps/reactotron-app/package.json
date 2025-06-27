@@ -1,8 +1,8 @@
 {
-  "name": "reactotron-app",
-  "productName": "Reactotron",
+  "name": "reactauri-app",
+  "productName": "Reactauri",
   "version": "3.7.8",
-  "description": "Reactotron desktop mode engage!",
+  "description": "Reactauri desktop mode engage!",
   "author": {
     "name": "Infinite Red",
     "email": "hello@infinite.red",
@@ -125,8 +125,8 @@
     "typescript": "^5.8.3"
   },
   "build": {
-    "productName": "Reactotron",
-    "appId": "com.reactotron.app",
+    "productName": "Reactauri",
+    "appId": "com.reactauri.app",
     "files": [
       "src/dist/",
       "src/app.html",

@@ -1,6 +1,6 @@
 import React from "react"
 import styled from "styled-components"
-import { reactotronLogo } from "../../images"
+import { reactauriLogo } from "../../images"
 import { EmptyState } from "reactotron-core-ui"
 import { openUrl } from '@tauri-apps/plugin-opener';
 
@@ -28,9 +28,9 @@ function openDocs() {
 
 function Welcome() {
   return (
-    <EmptyState image={reactotronLogo} title="Welcome to Reactotron!">
+    <EmptyState image={reactauriLogo} title="Welcome to Reactauri!">
       <WelcomeText>Connect a device or simulator to get started.</WelcomeText>
-      <WelcomeText>Need to set up your app to use Reactotron?</WelcomeText>
+      <WelcomeText>Need to set up your app to use Reactauri?</WelcomeText>
       <Container onClick={openDocs}>Check out the docs here!</Container>
     </EmptyState>
   )
