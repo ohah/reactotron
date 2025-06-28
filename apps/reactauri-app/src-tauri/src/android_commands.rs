@@ -10,19 +10,21 @@ pub async fn get_device_list() -> Result<String, String> {
     let result = String::from_utf8(output.stdout)
         .map_err(|e| format!("Failed to parse adb output: {}", e))?;
     
+    println!("get_device_list: {}", result);
+
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn reverse_tunnel_device(device_id: String, reactotron_port: u16, metro_port: u16) -> Result<(), String> {
     // Reverse tunnel for reactotron
-    let reactotron_result = std::process::Command::new("adb")
+    let reactauri_result = std::process::Command::new("adb")
         .args(["-s", &device_id, "reverse", &format!("tcp:{}", reactotron_port), &format!("tcp:{}", reactotron_port)])
         .output()
         .map_err(|e| format!("Failed to reverse tunnel reactotron port: {}", e))?;
     
-    if !reactotron_result.status.success() {
-        return Err(format!("Reactotron reverse tunnel failed: {}", String::from_utf8_lossy(&reactotron_result.stderr)));
+    if !reactauri_result.status.success() {
+        return Err(format!("Reactotron reverse tunnel failed: {}", String::from_utf8_lossy(&reactauri_result.stderr)));
     }
     
     // Reverse tunnel for metro
