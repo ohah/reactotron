@@ -6,6 +6,8 @@
 mod reactauri_core_server;
 use tauri::Manager;
 
+use android_commands::*;
+mod android_commands;
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 // #[tauri::command]
 // fn send_command(name: &str) -> String {
@@ -53,6 +55,11 @@ pub fn run() {
             start_core_server,
             stop_core_server,
             send_command,
+            get_device_list,
+            reverse_tunnel_device,
+            reload_app,
+            shake_device,
+            start_device_tracking
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]
