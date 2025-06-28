@@ -2,11 +2,13 @@ import { rspack } from "@rspack/core"
 import { defineConfig } from "@rspack/cli"
 import type { SwcLoaderOptions } from "@rspack/core"
 import path from "node:path"
-// import ReactRefreshRspackPlugin from '@rspack/plugin-react-refresh';
+import ReactRefreshRspackPlugin from '@rspack/plugin-react-refresh';
 
 export default defineConfig((env) => {
+  const isDevelopment = env.NODE_ENV === "development" || !!env?.RSPACK_SERVE;
+  
   return {
-    mode: env.NODE_ENV === "development" ? "development" : "production",
+    mode: isDevelopment ? "development" : "production",
     devtool: "source-map",
     plugins: [
       new rspack.HtmlRspackPlugin({
@@ -21,11 +23,11 @@ export default defineConfig((env) => {
         React: "react",
       }),
       // TODO
-      // env.RSPACK_SERVE && new ReactRefreshRspackPlugin({
-      //   overlay: false,
-      //   forceEnable: true,
-      //   exclude: /.css.ts/,
-      // }),
+      env.RSPACK_SERVE && new ReactRefreshRspackPlugin({
+        overlay: true,
+        forceEnable: false,
+        exclude: /.css.ts/,
+      }),
     ].filter(Boolean),
     target: ["web", "electron-renderer"],
     experiments: {
@@ -68,8 +70,8 @@ export default defineConfig((env) => {
               transform: {
                 react: {
                   throwIfNamespace: false,
-                  development: false,
-                  refresh: false,
+                  development: !!env?.RSPACK_SERVE,
+                  refresh: !!env?.RSPACK_SERVE,
                   useBuiltins: false,
                   runtime: "automatic",
                 },
