@@ -122,8 +122,6 @@ function AndroidDeviceHelp() {
 
     invoke("get_device_list")
 
-    // ipcRenderer.send("get-device-list")
-
     return () => {
       deviceListListener.then((listener) => listener())
     }
