@@ -22,7 +22,6 @@ export default defineConfig((env) => {
       new rspack.ProvidePlugin({
         React: "react",
       }),
-      // TODO
       env.RSPACK_SERVE && new ReactRefreshRspackPlugin({
         overlay: true,
         forceEnable: false,
