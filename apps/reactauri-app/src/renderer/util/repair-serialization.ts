@@ -27,7 +27,7 @@ replacements["~~~ -Infinity ~~~"] = Number.NEGATIVE_INFINITY
  * @param payload The object
  * @return The same object with some values replaced.
  */
-export default function repairSerialization(payload: unknown): unknown {
+export default function repairSerialization(payload: any): any {
   // we only want objects
   if (typeof payload !== "object" || payload === null) {
     return payload
