@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import styled from "styled-components"
 import { GoGear as SettingsIcon } from "react-icons/go"
 import { MdCompareArrows as ReverseTunnelIcon } from "react-icons/md"
@@ -7,7 +7,8 @@ import { IoReloadOutline as ReloadAppIcon } from "react-icons/io5"
 import { EmptyState, Tooltip } from "reactotron-core-ui"
 import { FaAndroid } from "react-icons/fa"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
-import { ipcRenderer } from "../../../util/ipc"
+import { invoke } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 
 const Container = styled.div`
   margin: 50px 0px;
@@ -101,32 +102,33 @@ const PortSettingsIconContainer = styled.div`
 `
 
 function AndroidDeviceHelp() {
-  const [androidDevices, setAndroidDevices] = React.useState([])
-  const [portsVisible, setPortsVisible] = React.useState(false)
-  const [reactotronPort, setReactotronPort] = React.useState("9090")
-  const [metroPort, setMetroPort] = React.useState("8081")
+  const [androidDevices, setAndroidDevices] = useState([])
+  const [portsVisible, setPortsVisible] = useState(false)
+  const [reactotronPort, setReactotronPort] = useState("9090")
+  const [metroPort, setMetroPort] = useState("8081")
 
   // When the page loads, get the list of devices from ADB to help users debug android issues.
-  React.useEffect(() => {
-    // ipcRenderer.on("device-list", (_event, arg) => {
-    //   arg = arg.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
-    //   const rawDevices = arg.split("\n")
-    //   rawDevices.shift() // Remove the first line
-    //   const devices = rawDevices.map((device) => {
-    //     const [id, state] = device.split("\t")
-    //     return { id, state }
-    //   })
-    //   setAndroidDevices(devices)
-    // })
+  useEffect(() => {
+    const deviceListListener = listen("device_list", (event) => {
+      let arg = event.payload as string
+      arg = arg?.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
+      const rawDevices = arg.split("\n")
+      rawDevices.shift() // Remove the first line
+      const devices = rawDevices.map((device) => {
+        const [id, state] = device.split("\t")
+        return { id, state }
+      })
+      setAndroidDevices(devices)
+    })
 
-    // ipcRenderer.send("get-device-list")
+    invoke("get_device_list")
 
-    // return () => {
-    //   ipcRenderer.removeAllListeners("device-list")
-    // }
+    return () => {
+      deviceListListener.then((listener) => listener())
+    }
   }, [])
 
-  const TitleComponent = React.useCallback(() => {
+  const TitleComponent = useCallback(() => {
     return (
       <Title>
         {androidDevices.length} Android Device{androidDevices.length !== 1 ? "s" : ""} Connected via
@@ -218,7 +220,11 @@ const AndroidDeviceList = ({
           <AndroidDeviceButtonsContainer>
             <ItemContainer
               onClick={() =>
-                ipcRenderer.send("reverse-tunnel-device", device.id, reactotronPort, metroPort)
+                invoke("reverse_tunnel_device", {
+                  deviceId: device.id,
+                  reactotronPort: parseInt(reactotronPort),
+                  metroPort: parseInt(metroPort)
+                })
               }
               data-tip={`This will allow reactotron to connect to your device via USB<br />by running adb reverse tcp:${reactotronPort} tcp:${reactotronPort}<br /><br />Reload your React Native app after pressing this.`}
               data-for="reverse-tunnel"
@@ -230,7 +236,7 @@ const AndroidDeviceList = ({
               <Tooltip id="reverse-tunnel" multiline />
             </ItemContainer>
             <ItemContainer
-              onClick={() => ipcRenderer.send("reload-app", device.id)}
+              onClick={() => invoke("reload_app", { deviceId: device.id })}
               data-tip="This will reload the React Native app currently running on this device.<br />If you get the React Native red screen, relaunch the app from the build process."
               data-for="reload-app"
             >
@@ -241,7 +247,7 @@ const AndroidDeviceList = ({
               <Tooltip id="reload-app" multiline />
             </ItemContainer>
             <ItemContainer
-              onClick={() => ipcRenderer.send("shake-device", device.id)}
+              onClick={() => invoke("shake_device", { deviceId: device.id })}
               data-tip="This will shake the device to bring up<br /> the React Native developer menu."
               data-for="shake-device"
             >
