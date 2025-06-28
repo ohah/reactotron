@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import styled from "styled-components"
 import { GoGear as SettingsIcon } from "react-icons/go"
 import { MdCompareArrows as ReverseTunnelIcon } from "react-icons/md"
@@ -109,8 +109,9 @@ function AndroidDeviceHelp() {
 
   // When the page loads, get the list of devices from ADB to help users debug android issues.
   useEffect(() => {
-    const deviceListListener = listen("device-list", (_event, arg) => {
-      arg = arg.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
+    const deviceListListener = listen("device_list", (event) => {
+      let arg = event.payload as string
+      arg = arg?.replace(/(\r\n|\n|\r)/gm, "\n").trim() // Fix newlines
       const rawDevices = arg.split("\n")
       rawDevices.shift() // Remove the first line
       const devices = rawDevices.map((device) => {
@@ -127,7 +128,7 @@ function AndroidDeviceHelp() {
     }
   }, [])
 
-  const TitleComponent = React.useCallback(() => {
+  const TitleComponent = useCallback(() => {
     return (
       <Title>
         {androidDevices.length} Android Device{androidDevices.length !== 1 ? "s" : ""} Connected via
