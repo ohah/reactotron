@@ -10,16 +10,16 @@
  */
 
 // on the server side, we'll be swapping out these values
-const replacements: { [key: string]: any } = Object.create(null)
+const replacements: { [key: string]: unknown } = Object.create(null)
 replacements["~~~ undefined ~~~"] = undefined
 replacements["~~~ null ~~~"] = null
 replacements["~~~ false ~~~"] = false
 replacements["~~~ zero ~~~"] = 0
 replacements["~~~ empty string ~~~"] = ""
 replacements["~~~ anonymous function ~~~"] = "fn()"
-replacements["~~~ NaN ~~~"] = NaN
-replacements["~~~ Infinity ~~~"] = Infinity
-replacements["~~~ -Infinity ~~~"] = -Infinity
+replacements["~~~ NaN ~~~"] = Number.NaN
+replacements["~~~ Infinity ~~~"] = Number.POSITIVE_INFINITY
+replacements["~~~ -Infinity ~~~"] = Number.NEGATIVE_INFINITY
 
 /**
  * Walks an object replacing any values with new values.  This mutates!
@@ -27,15 +27,15 @@ replacements["~~~ -Infinity ~~~"] = -Infinity
  * @param payload The object
  * @return The same object with some values replaced.
  */
-export default function repairSerialization(payload: any) {
+export default function repairSerialization(payload: any): any {
   // we only want objects
-  if (typeof payload !== "object") {
+  if (typeof payload !== "object" || payload === null) {
     return payload
   }
 
   // the recursive iterator
-  function walker(obj: any) {
-    let k
+  function walker(obj: Record<string, unknown>): void {
+    let k: string
     // NOTE: Object.prototype.hasOwnProperty IS defined however the bind to the object throws the def off.
     const has = Object.prototype.hasOwnProperty.bind(obj) as (key: string) => boolean
     for (k in obj) {
@@ -43,18 +43,21 @@ export default function repairSerialization(payload: any) {
         switch (typeof obj[k]) {
           // should we recurse thru sub-objects and arrays?
           case "object":
-            walker(obj[k])
+            if (obj[k] !== null) {
+              walker(obj[k] as Record<string, unknown>)
+            }
             break
 
           // mutate in-place with one of our replacements
           case "string":
-            if (obj[k].toLowerCase() in replacements) {
+            const strValue = obj[k] as string
+            if (strValue.toLowerCase() in replacements) {
               // look for straight up replacements
-              obj[k] = replacements[obj[k].toLowerCase()]
-            } else if (obj[k].length > 9) {
+              obj[k] = replacements[strValue.toLowerCase()]
+            } else if (strValue.length > 9) {
               // fancy function replacements
-              if (obj[k].startsWith("~~~ ") && obj[k].endsWith(" ~~~")) {
-                obj[k] = obj[k].replace(/~~~/g, "")
+              if (strValue.startsWith("~~~ ") && strValue.endsWith(" ~~~")) {
+                obj[k] = strValue.replace(/~~~/g, "")
               }
             }
         }
@@ -67,7 +70,7 @@ export default function repairSerialization(payload: any) {
   }
 
   // set it running
-  walker(payload)
+  walker(payload as Record<string, unknown>)
 
   // HACK - We should eventually make this function do less mutation
   return payload;

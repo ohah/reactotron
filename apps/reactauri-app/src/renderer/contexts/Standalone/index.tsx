@@ -64,12 +64,12 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     })
 
     const unlistenPortUnavailable = listen('portUnavailable', (event) => {
-      console.log('portUnavailable', repairSerialization(event.payload))
+      // console.log('portUnavailable', repairSerialization(event.payload))
       portUnavailable()
     })
 
     const unlistenCommnad = listen('command', (event) => {
-      console.log('command', repairSerialization(event.payload))
+      // console.log('command', repairSerialization(event.payload))
       commandReceived(repairSerialization(event.payload))
 
     })
@@ -97,7 +97,11 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     (type: string, payload: any, clientId?: string) => {
       if(!reactotronIsServerStarted.current) return;
 
-      invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
+      if(selectedClientId || clientId) {
+        invoke('send_command', { type, payload, clientId: clientId || selectedClientId })
+      } else {
+        console.error('No clientId found')
+      }
     },
     [selectedClientId]
   )
