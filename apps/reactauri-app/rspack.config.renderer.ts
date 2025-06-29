@@ -4,6 +4,32 @@ import type { SwcLoaderOptions } from "@rspack/core"
 import path from "node:path"
 import ReactRefreshRspackPlugin from '@rspack/plugin-react-refresh';
 
+const reactDevToolsPlugin = () => {
+  return {
+    name: "react-devtools-injector",
+    apply: (compiler: any) => {
+      if (compiler.options.mode === "development") {
+        compiler.hooks.compilation.tap("ReactDevTools", (compilation: any) => {
+          const hooks = rspack.HtmlRspackPlugin.getCompilationHooks(compilation);
+          hooks.alterAssetTags.tapPromise("ReactDevTools", async (data) => {ㄴ
+            data.assetTags.scripts.unshift({
+              tagName: "script",
+              attributes: {
+                src: "http://localhost:8097",
+                defer: false,
+                async: false
+              },
+              voidTag: false
+            });
+            console.log("React DevTools script tag added");
+            return data;
+          });
+        });
+      }
+    },
+  };
+};
+
 export default defineConfig((env) => {
   const isDevelopment = env.NODE_ENV === "development" || !!env?.RSPACK_SERVE;
   
@@ -27,6 +53,7 @@ export default defineConfig((env) => {
         forceEnable: false,
         exclude: /.css.ts/,
       }),
+      reactDevToolsPlugin(),
     ].filter(Boolean),
     target: ["web", "electron-renderer"],
     experiments: {
