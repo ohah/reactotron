@@ -11,7 +11,7 @@ const reactDevToolsPlugin = () => {
       if (compiler.options.mode === "development") {
         compiler.hooks.compilation.tap("ReactDevTools", (compilation: any) => {
           const hooks = rspack.HtmlRspackPlugin.getCompilationHooks(compilation);
-          hooks.alterAssetTags.tapPromise("ReactDevTools", async (data) => {ㄴ
+          hooks.alterAssetTags.tapPromise("ReactDevTools", async (data) => {
             data.assetTags.scripts.unshift({
               tagName: "script",
               attributes: {
