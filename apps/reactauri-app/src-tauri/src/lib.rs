@@ -4,7 +4,7 @@
 )]
 
 mod reactauri_core_server;
-use tauri::Manager;
+use tauri::{Manager};
 use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 
 use android_commands::*;
@@ -46,6 +46,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
             start_core_server,
@@ -63,7 +64,7 @@ pub fn run() {
                 window.open_devtools();
             }
             
-            // 메뉴 설정
+            // Setup menu
             let about_item = MenuItem::with_id(
                 app,
                 "about",
@@ -104,7 +105,7 @@ pub fn run() {
                 Some("CmdOrCtrl+Shift+R"),
             ).unwrap();
 
-            // 서브메뉴들 생성
+            // Create submenus
             let help_submenu = SubmenuBuilder::new(app, "Help")
                 .item(&about_item)
                 .item(&documentation_item)
@@ -119,23 +120,27 @@ pub fn run() {
                 .item(&force_reload_item)
                 .build().unwrap();
 
-            // 메인 메뉴 생성
+            // Create main menu
             let menu = MenuBuilder::new(app)
-                .items(&[&help_submenu, &file_submenu, &view_submenu])
+                .items(&[&file_submenu, &view_submenu, &help_submenu])
                 .build().unwrap();
 
-            // 메뉴 설정
+            // Set menu
             app.set_menu(menu).unwrap();
             
-            // 메뉴 이벤트 핸들러
+            // Menu event handler
             app.on_menu_event(move |app_handle, event| {
                 match event.id().0.as_str() {
                     "about" => {
-                        println!("About Reactauri clicked");
+                        use tauri_plugin_dialog::DialogExt;
+                        let _ = app_handle.dialog()
+                            .message("Reactauri v0.1.0\nReact Native Debugging Tool")
+                            .title("About Reactauri")
+                            .blocking_show();
                     }
                     "documentation" => {
                         println!("Documentation clicked");
-                        // URL 열기
+                        // Open URL
                         #[cfg(target_os = "macos")]
                         {
                             use std::process::Command;
@@ -148,6 +153,7 @@ pub fn run() {
                         }
                     }
                     "quit" => {
+                        println!("Quit pressed");
                         std::process::exit(0);
                     }
                     "reload" => {
@@ -166,7 +172,7 @@ pub fn run() {
                 }
             });
             
-            // 앱 시작 시 자동으로 Android 디바이스 감시 시작
+            // Start Android device tracking automatically on app startup
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 if let Err(e) = android_commands::start_device_tracking_internal(app_handle) {
