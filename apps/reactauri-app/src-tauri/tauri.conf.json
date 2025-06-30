@@ -14,12 +14,14 @@
       {
         "title": "reactauri",
         "width": 800,
-        "height": 700
+        "height": 700,
+        "devtools": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

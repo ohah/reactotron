@@ -18,6 +18,12 @@ const keyMap = {
     sequences: ["command+shift+l", "ctrl+shift+l"],
     action: "keyup" as KeyEventName,
   },
+  Refresh: {
+    name: "Refresh",
+    group: "Application",
+    sequences: ["command+r", "ctrl+r"],
+    action: "keyup" as KeyEventName,
+  },
   ZoomIn: {
     name: "Zoom In",
     group: "Application",
@@ -118,6 +124,10 @@ function KeybindHandler({ children }) {
 
   const handlers = {
     
+    Refresh: () => {
+      window.location.reload()
+    },
+    
     ZoomIn: async () => {
       try {
         const webviewWindow = getCurrentWebviewWindow()
@@ -205,7 +215,7 @@ function KeybindHandler({ children }) {
   }
 
   return (
-    <GlobalHotKeys keyMap={keyMap as any} handlers={handlers} allowChanges>
+    <GlobalHotKeys keyMap={keyMap} handlers={handlers} allowChanges>
       {children}
     </GlobalHotKeys>
   )
