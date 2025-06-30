@@ -78,7 +78,9 @@ const sessionStorage = {
           platformVersion: conn.platformVersion,
           osRelease: conn.osRelease,
           userAgent: conn.userAgent,
-          connected: conn.connected
+          connected: conn.connected,
+          // todo command save?
+          commands: []
         })),
         selectedClientId,
         timestamp: Date.now()
@@ -276,7 +278,10 @@ function useStandalone() {
       
       return {
         serverStatus: "stopped",
-        connections: savedState.connections || [],
+        connections: (savedState.connections || []).map(conn => ({
+          ...conn,
+          commands: conn.commands || []
+        })),
         selectedClientId: savedState.selectedClientId || null,
         orphanedCommands: [],
         commandListeners: [],
