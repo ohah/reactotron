@@ -101,11 +101,6 @@ const sessionStorage = {
       
       existingEvents.push(newEvent)
       
-      // Keep only the last 100 events to save memory
-      if (existingEvents.length > 100) {
-        existingEvents.splice(0, existingEvents.length - 100)
-      }
-      
       window.sessionStorage.setItem('reactotron-connection-events', JSON.stringify(existingEvents))
     } catch (e) {
       console.error('Failed to save connection event to session storage:', e)
