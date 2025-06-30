@@ -6,7 +6,6 @@ import SideBar from "./components/SideBar"
 import Footer from "./components/Footer"
 import RootContextProvider from "./contexts"
 import RootModals from "./RootModals"
-import { useAppMenu } from "./utils/useAppMenu"
 
 import Home from "./pages/home"
 import Timeline from "./pages/timeline"
@@ -42,8 +41,6 @@ const MainContainer = styled.div`
 `
 
 function App() {
-  useAppMenu();
-
   return (
     <Router>
       <RootContextProvider>
