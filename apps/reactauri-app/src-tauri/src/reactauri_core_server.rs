@@ -20,8 +20,6 @@ pub struct Command {
     pub payload: serde_json::Value,
     #[serde(default)]
     pub important: Option<serde_json::Value>,
-    #[serde(default)]
-    pub diff: Option<serde_json::Value>,
     #[serde(default, rename = "connectionId")]
     pub connection_id: Option<u32>,
     #[serde(default, rename = "messageId")]
@@ -272,7 +270,6 @@ pub fn start_server(app_handle: AppHandle) {
                                         "address": format_address(&addr),
                                         "clientId": client_id,
                                         "payload": cmd.payload,
-                                        "diff": cmd.diff,
                                     })).unwrap();
 
                                     println!("=== Sending current subscriptions ===");
