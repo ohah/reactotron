@@ -46,6 +46,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.12",
     "color-interpolate": "1.0.5",
     "date-fns": "2.30.0",
     "react-json-tree": "0.18.0",
