@@ -91,7 +91,7 @@ function Subscriptions() {
   const { commands, openSubscriptionModal } = useContext(ReactotronContext)
   const { removeSubscription, clearSubscriptions } = useContext(StateContext)
 
-  // 검색 UI 상태만 유지
+  // Keep only search UI state
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [search, setSearch] = useState("")
 
