@@ -1,5 +1,3 @@
-import diff from "microdiff"
-
 import { PluginConfig } from "./pluginConfig"
 
 export default function createCustomDispatch(
@@ -13,9 +11,6 @@ export default function createCustomDispatch(
   return (action: any) => {
     // start a timer
     const elapsed = reactotron.startTimer()
-
-    // save the state before the action is dispatched to be used on "diff"
-    const oldState = store?.getState?.()
 
     // call the original dispatch that actually does the real work
     const result = store.dispatch(action)
@@ -46,8 +41,7 @@ export default function createCustomDispatch(
       if (pluginConfig && typeof pluginConfig.isActionImportant === "function") {
         important = !!pluginConfig.isActionImportant(unwrappedAction)
       }
-      const state = store?.getState?.()
-      reactotron.reportReduxAction(unwrappedAction, ms, important, diff(oldState, state))
+      reactotron.reportReduxAction(unwrappedAction, ms, important)
     }
 
     return result
