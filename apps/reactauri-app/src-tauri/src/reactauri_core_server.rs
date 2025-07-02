@@ -12,6 +12,8 @@ use tokio::sync::Mutex as TokioMutex;
 use std::collections::HashMap;
 use uuid::Uuid;
 use chrono;
+use std::time::Duration;
+use tokio::time::interval;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,12 +71,56 @@ type WsStream = Arc<TokioMutex<Option<tokio_tungstenite::WebSocketStream<tokio::
 type ClientConnections = Arc<TokioMutex<HashMap<String, ClientConnection>>>;
 type Subscriptions = Arc<TokioMutex<Vec<String>>>;
 type PartialConnections = Arc<TokioMutex<Vec<PartialConnection>>>;
+type ServerStateHandle = Arc<TokioMutex<ServerState>>;
 
 static mut SERVER_HANDLE: Option<ServerHandle> = None;
 static mut WS_STREAM: Option<WsStream> = None;
 static mut CLIENT_CONNECTIONS: Option<ClientConnections> = None;
 static mut SUBSCRIPTIONS: Option<Subscriptions> = None;
 static mut PARTIAL_CONNECTIONS: Option<PartialConnections> = None;
+static mut SERVER_STATE: Option<ServerStateHandle> = None;
+
+// Server configuration options
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerOptions {
+    pub port: u16,
+    pub wss: Option<WssServerOptions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WssServerOptions {
+    pub path_to_cert: Option<String>,
+    pub path_to_key: Option<String>,
+    pub path_to_pfx: Option<String>,
+    pub passphrase: Option<String>,
+}
+
+impl Default for ServerOptions {
+    fn default() -> Self {
+        Self {
+            port: 9090,
+            wss: None,
+        }
+    }
+}
+
+// Server state management
+#[derive(Debug, Clone)]
+pub struct ServerState {
+    pub started: bool,
+    pub options: ServerOptions,
+    pub keep_alive_handle: Arc<TokioMutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
+}
+
+impl Default for ServerState {
+    fn default() -> Self {
+        Self {
+            started: false,
+            options: ServerOptions::default(),
+            keep_alive_handle: Arc::new(TokioMutex::new(None)),
+        }
+    }
+}
 
 pub fn get_server_handle() -> &'static ServerHandle {
     unsafe {
@@ -121,31 +167,80 @@ pub fn get_partial_connections() -> &'static PartialConnections {
     }
 }
 
+pub fn get_server_state() -> &'static ServerStateHandle {
+    unsafe {
+        if SERVER_STATE.is_none() {
+            SERVER_STATE = Some(Arc::new(TokioMutex::new(ServerState::default())));
+        }
+        SERVER_STATE.as_ref().unwrap()
+    }
+}
+
+// Configure server options
+pub async fn configure_server(options: ServerOptions) {
+    let server_state = get_server_state();
+    let mut state = server_state.lock().await;
+    state.options = options;
+}
+
+// Check if server is started
+pub async fn is_server_started() -> bool {
+    let server_state = get_server_state();
+    let state = server_state.lock().await;
+    state.started
+}
+
 pub fn start_server(app_handle: AppHandle) {
     let server_handle = get_server_handle();
+    let server_state = get_server_state();
+    
+    // Stop existing server if running
     {
         let mut guard = server_handle.lock().unwrap();
         if let Some(handle) = guard.take() {
-            println!("Stopping server");
+            println!("Stopping existing server");
             handle.abort();
             app_handle.emit("stop", "stop").unwrap();
         }
+    }
+    
+    // Update server state
+    {
+        let mut state = server_state.blocking_lock();
+        state.started = true;
         app_handle.emit("start", "start").unwrap();
     }
 
     let handle = async_runtime::spawn(async move {
-        let listener = match TcpListener::bind("0.0.0.0:9090").await {
+        // Get server options
+        let server_state = get_server_state();
+        let port = {
+            let state = server_state.lock().await;
+            state.options.port
+        };
+        
+        let listener = match TcpListener::bind(format!("0.0.0.0:{}", port)).await {
             Ok(listener) => listener,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::AddrInUse || e.to_string().contains("EADDRINUSE") {
-                    app_handle.emit("portUnavailable", 9090).unwrap();
+                    app_handle.emit("portUnavailable", port).unwrap();
                 } else {
                     println!("Error starting server: {}", e);
                 }
                 return;
             }
         };
-        println!("WebSocket server started: ws://0.0.0.0:9090");
+        println!("WebSocket server started: ws://0.0.0.0:{}", port);
+        
+        // Start keep alive task
+        let keep_alive_handle = start_keep_alive(app_handle.clone());
+        
+        // Store keep alive handle
+        {
+            let mut state = server_state.lock().await;
+            let mut handle_guard = state.keep_alive_handle.lock().await;
+            *handle_guard = Some(keep_alive_handle);
+        }
 
         let mut connection_id = 0;
         let mut message_id = 0;
@@ -382,6 +477,19 @@ pub fn start_server(app_handle: AppHandle) {
 pub async fn stop_server(app_handle: AppHandle) {
     println!("Stopping server");
     let server_handle = get_server_handle();
+    let server_state = get_server_state();
+    
+    // Stop keep alive task
+    {
+        let mut state = server_state.lock().await;
+        {
+            let mut handle_guard = state.keep_alive_handle.lock().await;
+            if let Some(keep_alive_handle) = handle_guard.take() {
+                keep_alive_handle.abort();
+            }
+        }
+        state.started = false;
+    }
     
     let handle = {
         let mut guard = server_handle.lock().unwrap();
@@ -394,7 +502,12 @@ pub async fn stop_server(app_handle: AppHandle) {
         // Wait for server to stop
         let _ = handle.await;
         
-        println!("WebSocket server stopped: ws://0.0.0.0:9090");
+        // Get port for logging
+        let port = {
+            let state = server_state.lock().await;
+            state.options.port
+        };
+        println!("WebSocket server stopped: ws://0.0.0.0:{}", port);
         
         // Clean up client connections
         let client_connections = get_client_connections();
@@ -501,4 +614,32 @@ pub async fn state_values_clear_subscriptions(app_handle: AppHandle) {
         delta_time: Some(0),
     };
     send_command(app_handle, command).await;
+}
+
+// Keep alive functionality - sends ping to all connected clients every 30 seconds
+fn start_keep_alive(app_handle: AppHandle) -> tauri::async_runtime::JoinHandle<()> {
+    async_runtime::spawn(async move {
+        let mut interval = interval(Duration::from_secs(30));
+        
+        loop {
+            interval.tick().await;
+            
+            let client_connections = get_client_connections();
+            let connections = client_connections.lock().await;
+            
+            for (_, conn) in connections.iter() {
+                let mut socket = conn.socket.lock().await;
+                if let Err(e) = socket.send(Message::Ping(vec![].into())).await {
+                    println!("Error sending ping to client {}: {}", conn.client_id, e);
+                }
+            }
+        }
+    })
+}
+
+// Helper function to create server with options
+pub async fn create_server(options: Option<ServerOptions>) -> Result<(), Box<dyn std::error::Error>> {
+    let options = options.unwrap_or_default();
+    configure_server(options).await;
+    Ok(())
 }
