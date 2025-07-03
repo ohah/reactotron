@@ -223,6 +223,10 @@ pub fn start_server(app_handle: AppHandle) {
             Ok(listener) => listener,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::AddrInUse || e.to_string().contains("EADDRINUSE") {
+                    {
+                        let mut state = server_state.lock().await;
+                        state.started = false;
+                    }
                     app_handle.emit("portUnavailable", port).unwrap();
                 } else {
                     println!("Error starting server: {}", e);
@@ -232,13 +236,18 @@ pub fn start_server(app_handle: AppHandle) {
         };
         println!("WebSocket server started: ws://0.0.0.0:{}", port);
         
-        // Start keep alive task
-        let keep_alive_handle = start_keep_alive(app_handle.clone());
         
         // Store keep alive handle
         {
             let mut state = server_state.lock().await;
             let mut handle_guard = state.keep_alive_handle.lock().await;
+
+            if let Some(existing_handle) = handle_guard.take() {
+                existing_handle.abort();
+            }
+
+            let keep_alive_handle = start_keep_alive(app_handle.clone());
+
             *handle_guard = Some(keep_alive_handle);
         }
 
