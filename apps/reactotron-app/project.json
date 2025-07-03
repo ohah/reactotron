@@ -4,6 +4,12 @@
   "targets": {
     "version": {
       "executor": "@jscutlery/semver:version"
+    },
+    "build": {
+      "executor": "nx:noop"
+    },
+    "build:dev": {
+      "executor": "nx:noop"
     }
   }
 }

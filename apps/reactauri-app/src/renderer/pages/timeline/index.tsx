@@ -10,6 +10,7 @@ import {
   EmptyState,
   ReactotronContext,
   TimelineContext,
+  VirtualizedTimeline,
   RandomJoke,
 } from "reactotron-core-ui"
 import {
@@ -101,6 +102,33 @@ function Timeline() {
     setHiddenCommands,
   } = useContext(TimelineContext)
 
+  const renderCommandItem = useCallback((command: any) => {
+    const CommandComponent = timelineCommandResolver(command.type)
+    if (CommandComponent) {
+      return (
+        <CommandComponent
+          key={command.messageId}
+          command={command}
+          copyToClipboard={writeText}
+          readFile={async (filePath) => {
+            try {
+              const data = await readTextFile(filePath)
+              return data
+            } catch (err) {
+              throw new Error("Something failed")
+            }
+          }}
+          sendCommand={sendCommand}
+          dispatchAction={(action: unknown) => {
+            sendCommand("state.action.dispatch", { action })
+          }}
+          openDispatchDialog={openDispatchModal}
+        />
+      )
+    }
+    return null
+  }, [writeText, readTextFile, sendCommand, openDispatchModal])
+
   let filteredCommands: unknown[] = []
   try {
     filteredCommands = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
@@ -113,9 +141,7 @@ function Timeline() {
     filteredCommands = filteredCommands.reverse()
   }
 
-  const dispatchAction = (action: unknown) => {
-    sendCommand("state.action.dispatch", { action })
-  }
+
 
   function openDocs() {
     openUrl("https://docs.infinite.red/reactotron/quick-start/react-native/")
@@ -209,32 +235,12 @@ function Timeline() {
             <RandomJoke />
           </EmptyState>
         ) : (
-          filteredCommands.map((command:any) => {
-            const CommandComponent = timelineCommandResolver(command.type)
-
-            if (CommandComponent) {
-              return (
-                <CommandComponent
-                  key={command.messageId}
-                  command={command}
-                  copyToClipboard={writeText}
-                  readFile={async (filePath) => {
-                    try {
-                      const data = await readTextFile(filePath)
-                      return data
-                    } catch (err) {
-                      throw new Error("Something failed")
-                    }
-                  }}
-                  sendCommand={sendCommand}
-                  dispatchAction={dispatchAction}
-                  openDispatchDialog={openDispatchModal}
-                />
-              )
-            }
-
-            return null
-          })
+          <VirtualizedTimeline
+            items={filteredCommands}
+            itemHeight={55}
+            renderItem={renderCommandItem}
+            overscan={10}
+          />
         )}
       </TimelineContainer>
       <TimelineFilterModal

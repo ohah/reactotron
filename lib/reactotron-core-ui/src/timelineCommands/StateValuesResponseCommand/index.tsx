@@ -36,5 +36,5 @@ const StateValuesResponseCommand: FunctionComponent<Props> = ({ command, isOpen,
   )
 }
 
-export default buildTimelineCommand(StateValuesResponseCommand, true)
+export default buildTimelineCommand(StateValuesResponseCommand)
 export { StateValuesResponseCommand }

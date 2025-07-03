@@ -1,4 +1,5 @@
-import React, { FunctionComponent, useState } from "react"
+import React, { FunctionComponent, useContext } from "react"
+import TimelineContext from "../contexts/Timeline"
 
 export interface TimelineCommandPropsEx<T> {
   command: {
@@ -16,6 +17,7 @@ export interface TimelineCommandPropsEx<T> {
   sendCommand?: (type: string, payload: any, clientId?: string) => void
   openDispatchDialog?: (action: string) => void
   dispatchAction?: (action: any) => void
+  onExpandChange?: (messageId: number, isOpen: boolean) => void
 }
 
 export interface TimelineCommandProps<T> extends TimelineCommandPropsEx<T> {
@@ -24,13 +26,21 @@ export interface TimelineCommandProps<T> extends TimelineCommandPropsEx<T> {
 }
 
 export function buildTimelineCommand<T>(
-  Component: FunctionComponent<TimelineCommandProps<T>>,
-  startOpen = false
+  Component: FunctionComponent<TimelineCommandProps<T>>
 ) {
   // eslint-disable-next-line react/display-name
   return (props: TimelineCommandPropsEx<T>) => {
-    const [isOpen, setIsOpen] = useState(startOpen)
+    const { toggleItemExpanded, isItemExpanded } = useContext(TimelineContext)
+    const messageId = props.command.messageId.toString()
+    const isOpen = isItemExpanded(messageId)
 
-    return <Component {...props} isOpen={isOpen} setIsOpen={setIsOpen} />
+    const handleSetIsOpen = (newIsOpen: boolean) => {
+      toggleItemExpanded(messageId)
+      if (props.onExpandChange) {
+        props.onExpandChange(props.command.messageId, newIsOpen)
+      }
+    }
+
+    return <Component {...props} isOpen={isOpen} setIsOpen={handleSetIsOpen} />
   }
 }

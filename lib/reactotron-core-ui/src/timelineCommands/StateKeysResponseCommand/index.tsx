@@ -84,5 +84,5 @@ const StateKeysResponseCommand: FunctionComponent<Props> = ({
   )
 }
 
-export default buildTimelineCommand(StateKeysResponseCommand, true)
+export default buildTimelineCommand(StateKeysResponseCommand)
 export { StateKeysResponseCommand }

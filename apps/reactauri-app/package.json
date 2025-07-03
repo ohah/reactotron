@@ -39,6 +39,7 @@
     "ci:test": "yarn test --runInBand"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.12",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "~2",
     "@tauri-apps/plugin-dialog": "~2",

@@ -20,6 +20,8 @@ interface Context {
   toggleReverse: () => void
   hiddenCommands: CommandTypeKey[]
   setHiddenCommands: (commandTypes: CommandTypeKey[]) => void
+  toggleItemExpanded: (messageId: string) => void
+  isItemExpanded: (messageId: string) => boolean
 }
 
 const TimelineContext = React.createContext<Context>({
@@ -38,6 +40,8 @@ const TimelineContext = React.createContext<Context>({
   toggleReverse: null,
   hiddenCommands: [],
   setHiddenCommands: null,
+  toggleItemExpanded: () => {},
+  isItemExpanded: () => false,
 })
 
 const Provider: FunctionComponent<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,6 +61,8 @@ const Provider: FunctionComponent<{ children: React.ReactNode }> = ({ children }
     toggleReverse,
     hiddenCommands,
     setHiddenCommands,
+    toggleItemExpanded,
+    isItemExpanded,
   } = useTimeline()
 
   return (
@@ -77,6 +83,8 @@ const Provider: FunctionComponent<{ children: React.ReactNode }> = ({ children }
         toggleReverse,
         hiddenCommands,
         setHiddenCommands,
+        toggleItemExpanded,
+        isItemExpanded,
       }}
     >
       {children}

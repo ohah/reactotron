@@ -14,6 +14,7 @@ interface TimelineState {
   isFilterOpen: boolean
   isReversed: boolean
   hiddenCommands: CommandTypeKey[]
+  expandedItems: Set<string> // Use messageId as key
 }
 
 enum TimelineActionType {
@@ -26,6 +27,8 @@ enum TimelineActionType {
   OrderReverse = "ORDER_REVERSE",
   OrderRegular = "ORDER_REGULAR",
   HiddenCommandsSet = "HIDDENCOMMANDS_SET",
+  ItemExpand = "ITEM_EXPAND",
+  ItemCollapse = "ITEM_COLLAPSE",
 }
 
 type Action =
@@ -45,6 +48,10 @@ type Action =
   | {
       type: TimelineActionType.HiddenCommandsSet
       payload: CommandTypeKey[]
+    }
+  | {
+      type: TimelineActionType.ItemExpand | TimelineActionType.ItemCollapse
+      payload: string // messageId
     }
 
 function timelineReducer(state: TimelineState, action: Action) {
@@ -67,6 +74,16 @@ function timelineReducer(state: TimelineState, action: Action) {
       return { ...state, isReversed: false }
     case TimelineActionType.HiddenCommandsSet:
       return { ...state, hiddenCommands: action.payload }
+    case TimelineActionType.ItemExpand: {
+      const expandedSet = new Set(state.expandedItems)
+      expandedSet.add(action.payload)
+      return { ...state, expandedItems: expandedSet }
+    }
+    case TimelineActionType.ItemCollapse: {
+      const newExpandedItems = new Set(state.expandedItems)
+      newExpandedItems.delete(action.payload)
+      return { ...state, expandedItems: newExpandedItems }
+    }
     default:
       return state
   }
@@ -80,9 +97,10 @@ function useTimeline() {
     isFilterOpen: false,
     isReversed: false,
     hiddenCommands: [],
+    expandedItems: new Set<string>(),
   })
 
-  // Load some values
+  // Load persisted values from localStorage
   useEffect(() => {
     const isReversed = localStorage.getItem(StorageKey.ReversedOrder) === "reversed"
     const hiddenCommands = JSON.parse(localStorage.getItem(StorageKey.HiddenCommands) || "[]")
@@ -97,7 +115,7 @@ function useTimeline() {
     })
   }, [])
 
-  // Setup event handlers
+  // Event handlers
   const toggleSearch = () => {
     dispatch({
       type: state.isSearchOpen ? TimelineActionType.SearchClose : TimelineActionType.SearchOpen,
@@ -161,6 +179,18 @@ function useTimeline() {
     })
   }
 
+  const toggleItemExpanded = (messageId: string) => {
+    const isExpanded = state.expandedItems.has(messageId)
+    
+    if (isExpanded) {
+      dispatch({ type: TimelineActionType.ItemCollapse, payload: messageId })
+    } else {
+      dispatch({ type: TimelineActionType.ItemExpand, payload: messageId })
+    }
+  }
+
+  const isItemExpanded = (messageId: string) => state.expandedItems.has(messageId)
+
   return {
     isSearchOpen: state.isSearchOpen,
     toggleSearch,
@@ -177,6 +207,8 @@ function useTimeline() {
     toggleReverse,
     hiddenCommands: state.hiddenCommands,
     setHiddenCommands,
+    toggleItemExpanded,
+    isItemExpanded,
   }
 }
 
