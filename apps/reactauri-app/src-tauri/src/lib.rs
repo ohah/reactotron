@@ -105,6 +105,39 @@ pub fn run() {
                 Some("CmdOrCtrl+Shift+R"),
             ).unwrap();
 
+            // Edit menu items
+            let copy_item = MenuItem::with_id(
+                app,
+                "copy",
+                "Copy",
+                true,
+                Some("CmdOrCtrl+C"),
+            ).unwrap();
+
+            let paste_item = MenuItem::with_id(
+                app,
+                "paste",
+                "Paste",
+                true,
+                Some("CmdOrCtrl+V"),
+            ).unwrap();
+
+            let cut_item = MenuItem::with_id(
+                app,
+                "cut",
+                "Cut",
+                true,
+                Some("CmdOrCtrl+X"),
+            ).unwrap();
+
+            let select_all_item = MenuItem::with_id(
+                app,
+                "select_all",
+                "Select All",
+                true,
+                Some("CmdOrCtrl+A"),
+            ).unwrap();
+
             // Create submenus
             let help_submenu = SubmenuBuilder::new(app, "Help")
                 .item(&about_item)
@@ -115,6 +148,13 @@ pub fn run() {
                 .item(&quit_item)
                 .build().unwrap();
 
+            let edit_submenu = SubmenuBuilder::new(app, "Edit")
+                .item(&copy_item)
+                .item(&paste_item)
+                .item(&cut_item)
+                .item(&select_all_item)
+                .build().unwrap();
+
             let view_submenu = SubmenuBuilder::new(app, "View")
                 .item(&reload_item)
                 .item(&force_reload_item)
@@ -122,14 +162,14 @@ pub fn run() {
 
             // Create main menu
             let menu = MenuBuilder::new(app)
-                .items(&[&file_submenu, &view_submenu, &help_submenu])
+                .items(&[&file_submenu, &edit_submenu, &view_submenu, &help_submenu])
                 .build().unwrap();
 
             // Set menu
             app.set_menu(menu).unwrap();
             
             // Menu event handler
-            app.on_menu_event(move |app_handle, event| {
+            app.on_menu_event(|app_handle, event| {
                 match event.id().0.as_str() {
                     "about" => {
                         use tauri_plugin_dialog::DialogExt;
@@ -164,6 +204,26 @@ pub fn run() {
                     "force_reload" => {
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let _ = window.eval("window.location.reload()");
+                        }
+                    }
+                    "copy" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.eval("document.execCommand('copy')");
+                        }
+                    }
+                    "paste" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.eval("document.execCommand('paste')");
+                        }
+                    }
+                    "cut" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.eval("document.execCommand('cut')");
+                        }
+                    }
+                    "select_all" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.eval("document.execCommand('selectAll')");
                         }
                     }
                     _ => {
