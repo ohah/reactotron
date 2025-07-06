@@ -14,6 +14,7 @@ import Snapshots from "./pages/state/Snapshots"
 import Overlay from "./pages/reactNative/Overlay"
 import Storybook from "./pages/reactNative/Storybook"
 import CustomCommands from "./pages/customCommands"
+import Storage from "./pages/storage"
 import Help from "./pages/help"
 
 const AppContainer = styled.div`
@@ -63,6 +64,9 @@ function App() {
                 {/* React Native */}
                 <Route path="/native/overlay" element={<Overlay />} />
                 <Route path="/native/storybook" element={<Storybook />} />
+
+                {/* Storage */}
+                <Route path="/storage/*" element={<Storage />} />
 
                 {/* Custom Commands */}
                 <Route path="/customCommands" element={<CustomCommands />} />
