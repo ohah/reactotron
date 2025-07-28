@@ -261,217 +261,246 @@ pub fn start_server(app_handle: AppHandle) {
         };
 
         loop {
-            let (stream, addr) = listener.accept().await.unwrap();
-            let app_handle = app_handle.clone();
-            let current_connection_id = connection_id;
-            connection_id += 1;
+            match listener.accept().await {
+                Ok((stream, addr)) => {
+                    let app_handle = app_handle.clone();
+                    let current_connection_id = connection_id;
+                    connection_id += 1;
 
-            async_runtime::spawn(async move {
-                let ws_stream = get_ws_stream();
-                let client_connections = get_client_connections();
-                let subscriptions = get_subscriptions();
-                let partial_connections = get_partial_connections();
-                
-                let ws = accept_async(stream).await.unwrap();
-                let ws = Arc::new(TokioMutex::new(ws));
-                println!("WebSocket connection accepted from {}", format_address(&addr));
+                    async_runtime::spawn(async move {
+                        let client_connections = get_client_connections();
+                        let subscriptions = get_subscriptions();
+                        let partial_connections = get_partial_connections();
+                        
+                        let ws = match accept_async(stream).await {
+                            Ok(ws) => Arc::new(TokioMutex::new(ws)),
+                            Err(e) => {
+                                println!("Error during WebSocket handshake: {}", e);
+                                return;
+                            }
+                        };
+                        println!("WebSocket connection accepted from {}", format_address(&addr));
 
-                // Create and store partialConnection
-                let partial_connection = PartialConnection {
-                    id: current_connection_id,
-                    address: format_address(&addr),
-                    socket: ws.clone(),
-                };
+                        // Create and store partialConnection
+                        let partial_connection = PartialConnection {
+                            id: current_connection_id,
+                            address: format_address(&addr),
+                            socket: ws.clone(),
+                        };
 
-                // Add to partialConnections
-                {
-                    let mut partials = partial_connections.lock().await;
-                    partials.push(partial_connection.clone());
-                }
+                        // Add to partialConnections
+                        {
+                            let mut partials = partial_connections.lock().await;
+                            partials.push(partial_connection.clone());
+                        }
 
-                // Emit connect event
-                app_handle.emit("connect", &partial_connection).unwrap();
+                        // Emit connect event
+                        app_handle.emit("connect", &partial_connection).unwrap();
 
-                let mut current_client_id = None;
+                        let mut current_client_id = None;
 
-                loop {
-                    let mut ws_guard = ws.lock().await;
-                    if let Some(msg) = ws_guard.next().await {
-                        let msg = msg.unwrap();
-                        if msg.is_text() {
-                            let text = msg.to_text().unwrap();
-                            println!("Received text: {}", text);
-                            
-                            if let Ok(mut cmd) = serde_json::from_str::<Command>(text) {
-                                message_id += 1;
-                                cmd.message_id = Some(message_id);
-                                cmd.connection_id = Some(current_connection_id);
+                        loop {
+                            let msg = {
+                                let mut ws_guard = ws.lock().await;
+                                ws_guard.next().await
+                            };
 
-                                println!("=== New client connection ===");
-                                println!("Connection ID: {}", current_connection_id);
+                            match msg {
+                                Some(Ok(msg)) => {
+                                    if msg.is_text() {
+                                        let text = msg.to_text().unwrap_or_default();
+                                        if text.is_empty() { continue; }
 
-                                // Handle client.intro
-                                if cmd.r#type == "client.intro" {
-                                    println!("=== Processing client.intro ===");
-                                    println!("Client ID: {:?}", cmd.payload.get("clientId"));
-                                    println!("Payload: {:?}", cmd.payload);
+                                        println!("Received text: {}", text);
+                                        
+                                        if let Ok(mut cmd) = serde_json::from_str::<Command>(text) {
+                                            message_id += 1;
+                                            cmd.message_id = Some(message_id);
+                                            cmd.connection_id = Some(current_connection_id);
 
-                                    // Find partialConnection
-                                    let mut partials = partial_connections.lock().await;
-                                    let part_conn_opt = partials.iter().find(|c| c.id == current_connection_id).cloned();
+                                            // Handle client.intro
+                                            if cmd.r#type == "client.intro" {
+                                                println!("=== Processing client.intro ===");
+                                                println!("Client ID: {:?}", cmd.payload.get("clientId"));
+                                                println!("Payload: {:?}", cmd.payload);
 
-                                    // Add address to payload
-                                    if let Some(part_conn) = &part_conn_opt {
-                                        if let Some(payload) = cmd.payload.as_object_mut() {
-                                            payload.insert("address".to_string(), serde_json::Value::String(part_conn.address.clone()));
-                                        }
-                                    }
+                                                // Find partialConnection
+                                                let mut partials = partial_connections.lock().await;
+                                                let part_conn_opt = partials.iter().find(|c| c.id == current_connection_id).cloned();
 
-                                    // Remove from partialConnections
-                                    partials.retain(|c| c.id != current_connection_id);
+                                                // Add address to payload
+                                                if let Some(part_conn) = &part_conn_opt {
+                                                    if let Some(payload) = cmd.payload.as_object_mut() {
+                                                        payload.insert("address".to_string(), serde_json::Value::String(part_conn.address.clone()));
+                                                    }
+                                                }
 
-                                    // Handle clientId
-                                    let mut client_id = cmd.payload.get("clientId").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                    println!("client_id: {:?}", client_id);
-                                    if client_id.is_none() || client_id.as_ref().map_or(false, |id| id == "~~~ null ~~~") {
-                                        println!("No clientId found, generating new one");
-                                        client_id = Some(Uuid::new_v4().to_string());
-                                        // Send clientId to client
-                                        let response = serde_json::json!({
-                                            "type": "setClientId",
-                                            "payload": client_id.as_ref().unwrap()
-                                        });
-                                        ws_guard.send(Message::Text(response.to_string().into())).await.unwrap();
-                                        println!("Sent clientId to client: {}", client_id.as_ref().unwrap());
-                                    } else {
-                                        // If a socket with the same clientId already exists, close and remove the old connection
-                                        let mut connections = client_connections.lock().await;
-                                        let existing = connections.iter()
-                                            .find(|(_, conn)| conn.client_id.as_str() == client_id.as_ref().unwrap())
-                                            .map(|(k, _)| k.clone());
-                                        if let Some(existing_key) = existing {
-                                            connections.remove(&existing_key);
-                                        }
-                                    }
+                                                // Remove from partialConnections
+                                                partials.retain(|c| c.id != current_connection_id);
 
-                                    let client_id = client_id.unwrap();
-                                    current_client_id = Some(client_id.clone());
-                                    cmd.client_id = Some(client_id.clone());
+                                                // Handle clientId
+                                                let mut client_id = cmd.payload.get("clientId").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                                println!("client_id: {:?}", client_id);
+                                                if client_id.is_none() || client_id.as_ref().map_or(false, |id| id == "~~~ null ~~~") {
+                                                    println!("No clientId found, generating new one");
+                                                    client_id = Some(Uuid::new_v4().to_string());
+                                                    // Send clientId to client
+                                                    let response = serde_json::json!({
+                                                        "type": "setClientId",
+                                                        "payload": client_id.as_ref().unwrap()
+                                                    });
+                                                    // We need to lock the socket again to send
+                                                    let mut ws_guard = ws.lock().await;
+                                                    if let Err(e) = ws_guard.send(Message::Text(response.to_string().into())).await {
+                                                        println!("Error sending clientId: {}", e);
+                                                    }
+                                                    println!("Sent clientId to client: {}", client_id.as_ref().unwrap());
+                                                } else {
+                                                    // If a socket with the same clientId already exists, close and remove the old connection
+                                                    let mut connections = client_connections.lock().await;
+                                                    if let Some(client_id_str) = client_id.as_deref() {
+                                                        if let Some(existing_conn) = connections.remove(client_id_str) {
+                                                            println!("Closing existing connection for client ID: {}", client_id_str);
+                                                            let mut socket = existing_conn.socket.lock().await;
+                                                            let _ = socket.close(None).await;
+                                                        }
+                                                    }
+                                                }
 
-                                    // Create connection object and add to connections
-                                    let mut connections = client_connections.lock().await;
-                                    let connection = ClientConnection {
-                                        id: current_connection_id,
-                                        address: format_address(&addr),
-                                        client_id: client_id.clone(),
-                                        socket: ws.clone(),
-                                    };
-                                    connections.insert(client_id.clone(), connection.clone());
+                                                let client_id = client_id.unwrap();
+                                                current_client_id = Some(client_id.clone());
+                                                cmd.client_id = Some(client_id.clone());
 
-                                    // Emit connectionEstablished event
-                                    app_handle.emit("connectionEstablished", &serde_json::json!({
-                                        "id": current_connection_id,
-                                        "address": format_address(&addr),
-                                        "clientId": client_id,
-                                        "payload": cmd.payload,
-                                    })).unwrap();
+                                                // Create connection object and add to connections
+                                                let mut connections = client_connections.lock().await;
+                                                let connection = ClientConnection {
+                                                    id: current_connection_id,
+                                                    address: format_address(&addr),
+                                                    client_id: client_id.clone(),
+                                                    socket: ws.clone(),
+                                                };
+                                                connections.insert(client_id.clone(), connection.clone());
 
-                                    println!("=== Sending current subscriptions ===");
-                                    let subs = subscriptions.lock().await;
-                                    println!("Current subscriptions: {:?}", *subs);
-                                }
+                                                // Emit connectionEstablished event
+                                                app_handle.emit("connectionEstablished", &serde_json::json!({
+                                                    "id": current_connection_id,
+                                                    "address": format_address(&addr),
+                                                    "clientId": client_id,
+                                                    "payload": cmd.payload,
+                                                })).unwrap();
 
-                                // Set client_id for all messages if current_client_id exists
-                                if let Some(client_id) = &current_client_id {
-                                    cmd.client_id = Some(client_id.clone());
-                                }
+                                                println!("=== Sending current subscriptions ===");
+                                                let subs = subscriptions.lock().await;
+                                                println!("Current subscriptions: {:?}", *subs);
+                                            }
 
-                                // Handle state.values.subscribe
-                                if cmd.r#type == "state.values.subscribe" {
-                                    println!("=== Processing state.values.subscribe ===");
-                                    println!("Subscribe paths: {:?}", cmd.payload);
-                                    
-                                    // Add paths sent by client to subscription list
-                                    if let Some(paths) = cmd.payload.get("paths") {
-                                        if let Some(paths_array) = paths.as_array() {
-                                            let mut subs = subscriptions.lock().await;
-                                            for path in paths_array {
-                                                if let Some(path_str) = path.as_str() {
-                                                    if !subs.contains(&path_str.to_string()) {
-                                                        subs.push(path_str.to_string());
+                                            // Set client_id for all messages if current_client_id exists
+                                            if let Some(client_id) = &current_client_id {
+                                                cmd.client_id = Some(client_id.clone());
+                                            }
+
+                                            // Handle state.values.subscribe
+                                            if cmd.r#type == "state.values.subscribe" {
+                                                println!("=== Processing state.values.subscribe ===");
+                                                println!("Subscribe paths: {:?}", cmd.payload);
+                                                
+                                                // Add paths sent by client to subscription list
+                                                if let Some(paths) = cmd.payload.get("paths") {
+                                                    if let Some(paths_array) = paths.as_array() {
+                                                        let mut subs = subscriptions.lock().await;
+                                                        for path in paths_array {
+                                                            if let Some(path_str) = path.as_str() {
+                                                                if !subs.contains(&path_str.to_string()) {
+                                                                    subs.push(path_str.to_string());
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            
+                                                // Send subscription info to all clients
+                                                let command = CommandWithClientId {
+                                                    r#type: "state.values.subscribe".to_string(),
+                                                    payload: serde_json::json!({ "paths": *subscriptions.lock().await }),
+                                                    client_id: cmd.client_id.clone().unwrap(),
+                                                    important: false,
+                                                    date: Some(chrono::Utc::now().to_rfc3339()),
+                                                    delta_time: Some(0),
+                                                };
+                                                send_command(app_handle.clone(), command).await;
+                                            }
+
+                                            // Handle state.values.change
+                                            if cmd.r#type == "state.values.change" {
+                                                println!("=== Processing state.values.change ===");
+                                                println!("Changes: {:?}", cmd.payload);
+                                                if let Some(changes) = cmd.payload.get("changes") {
+                                                    if let Some(paths) = changes.as_array() {
+                                                        let mut subs = subscriptions.lock().await;
+                                                        subs.clear(); // Clear existing subscription list
+                                                        for path in paths {
+                                                            if let Some(path_str) = path.get("path").and_then(|p| p.as_str()) {
+                                                                subs.push(path_str.to_string());
+                                                            }
+                                                        }
+                                                        println!("Current subscriptions: {:?}", *subs);
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-                                   
-                                    // Send subscription info to all clients
-                                    let command = CommandWithClientId {
-                                        r#type: "state.values.subscribe".to_string(),
-                                        payload: serde_json::json!({ "paths": *subscriptions.lock().await }),
-                                        client_id: cmd.client_id.clone().unwrap(),
-                                        important: false,
-                                        date: Some(chrono::Utc::now().to_rfc3339()),
-                                        delta_time: Some(0),
-                                    };
-                                    send_command(app_handle.clone(), command).await;
-                                }
 
-                                // Handle state.values.change
-                                if cmd.r#type == "state.values.change" {
-                                    println!("=== Processing state.values.change ===");
-                                    println!("Changes: {:?}", cmd.payload);
-                                    if let Some(changes) = cmd.payload.get("changes") {
-                                        if let Some(paths) = changes.as_array() {
-                                            let mut subs = subscriptions.lock().await;
-                                            subs.clear(); // Clear existing subscription list
-                                            for path in paths {
-                                                if let Some(path_str) = path.get("path").and_then(|p| p.as_str()) {
-                                                    subs.push(path_str.to_string());
+                                            // Handle state.backup.response
+                                            if cmd.r#type == "state.backup.response" {
+                                                if let Some(payload) = cmd.payload.as_object_mut() {
+                                                    payload.insert("name".to_string(), serde_json::Value::Null);
                                                 }
                                             }
-                                            println!("Current subscriptions: {:?}", *subs);
+
+                                            println!("=== Emitting command ===");
+                                            println!("Command type: {}", cmd.r#type);
+                                            println!("Command payload: {:?}", cmd.payload);
+                                            app_handle.emit("command", &cmd).unwrap();
+                                        } else {
+                                            println!("Failed to parse command: {}", text);
                                         }
+                                    } else if msg.is_close() {
+                                        println!("Received close message");
+                                        break;
                                     }
                                 }
-
-                                // Handle state.backup.response
-                                if cmd.r#type == "state.backup.response" {
-                                    if let Some(payload) = cmd.payload.as_object_mut() {
-                                        payload.insert("name".to_string(), serde_json::Value::Null);
-                                    }
+                                Some(Err(e)) => {
+                                    println!("WebSocket error: {}", e);
+                                    break;
                                 }
-
-                                println!("=== Emitting command ===");
-                                println!("Command type: {}", cmd.r#type);
-                                println!("Command payload: {:?}", cmd.payload);
-                                app_handle.emit("command", &cmd).unwrap();
-                            } else {
-                                println!("Failed to parse command: {}", text);
+                                None => {
+                                    // Stream has ended
+                                    break;
+                                }
                             }
                         }
-                        println!("=== Sending subscriptions ===");
-                        let subs = subscriptions.lock().await;
-                        println!("Sending subscriptions: {:?}", *subs);
-                    } else {
-                        break;
-                    }
-                }
 
-                // Remove from partialConnections on disconnect
-                {
-                    let mut partials = partial_connections.lock().await;
-                    partials.retain(|conn| conn.id != current_connection_id);
-                }
+                        // --- Disconnection logic ---
+                        println!("Client disconnected: {}", format_address(&addr));
 
-                // Handle disconnection
-                if let Some(client_id) = current_client_id {
-                    let mut connections = client_connections.lock().await;
-                    if let Some(conn) = connections.remove(&client_id) {
-                        app_handle.emit("disconnect", &conn).unwrap();
-                    }
+                        // Remove from partialConnections
+                        {
+                            let mut partials = partial_connections.lock().await;
+                            partials.retain(|conn| conn.id != current_connection_id);
+                        }
+
+                        // Remove from connections and emit disconnect event
+                        if let Some(client_id) = current_client_id {
+                            let mut connections = client_connections.lock().await;
+                            if let Some(conn) = connections.remove(&client_id) {
+                                println!("Emitting disconnect for client ID: {}", client_id);
+                                app_handle.emit("disconnect", &conn).unwrap();
+                            }
+                        }
+                    });
                 }
-            });
+                Err(e) => {
+                    println!("Error accepting connection: {}", e);
+                }
+            }
         }
     });
 
@@ -631,12 +660,22 @@ fn start_keep_alive(app_handle: AppHandle) -> tauri::async_runtime::JoinHandle<(
             interval.tick().await;
             
             let client_connections = get_client_connections();
-            let connections = client_connections.lock().await;
-            
-            for (_, conn) in connections.iter() {
+            let mut connections = client_connections.lock().await;
+            let mut disconnected_clients = Vec::new();
+
+            for (client_id, conn) in connections.iter() {
                 let mut socket = conn.socket.lock().await;
                 if let Err(e) = socket.send(Message::Ping(vec![].into())).await {
-                    println!("Error sending ping to client {}: {}", conn.client_id, e);
+                    println!("Error sending ping to client {}, assuming disconnection: {}", conn.client_id, e);
+                    disconnected_clients.push(client_id.clone());
+                }
+            }
+
+            if !disconnected_clients.is_empty() {
+                for client_id in disconnected_clients {
+                    if let Some(conn) = connections.remove(&client_id) {
+                        app_handle.emit("disconnect", &conn).unwrap();
+                    }
                 }
             }
         }
