@@ -327,8 +327,7 @@ function useStandalone() {
       // Then notify listeners
       state.commandListeners.forEach((cl) => cl(command))
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [state.commandListeners]
   )
 
   // Called when a client disconnects. NOTE: They could be coming back. This could happen with a reload of the simulator!
