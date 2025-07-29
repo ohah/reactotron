@@ -1,19 +1,20 @@
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime;
 use tauri::AppHandle;
 use tauri::Emitter;
-use tauri::Listener;
-use tokio::net::TcpListener;
-use tokio_tungstenite::accept_async;
+use tauri::Manager;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio_tungstenite::tungstenite::Message;
-use std::sync::{Arc, Mutex};
-use tokio::sync::Mutex as TokioMutex;
+use tokio_tungstenite::{accept_async, WebSocketStream};
 use std::collections::HashMap;
-use uuid::Uuid;
-use chrono;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::time::interval;
+use uuid::Uuid;
+
+// --- Data Structures ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,67 +48,43 @@ pub struct CommandWithClientId {
     pub delta_time: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// Represents a fully established client connection.
+/// The `sender` is used to send messages to this client's actor task.
+#[derive(Debug, Clone)]
 pub struct ClientConnection {
     pub id: u32,
     pub address: String,
     pub client_id: String,
-    #[serde(skip)]
-    pub socket: Arc<TokioMutex<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>,
+    pub sender: mpsc::Sender<Message>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct PartialConnection {
-    pub id: u32,
-    pub address: String,
-    #[serde(skip)]
-    pub socket: Arc<TokioMutex<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>,
-}
+// --- Global State ---
 
 type ServerHandle = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
-type WsStream = Arc<TokioMutex<Option<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>>>;
 type ClientConnections = Arc<TokioMutex<HashMap<String, ClientConnection>>>;
 type Subscriptions = Arc<TokioMutex<Vec<String>>>;
-type PartialConnections = Arc<TokioMutex<Vec<PartialConnection>>>;
 type ServerStateHandle = Arc<TokioMutex<ServerState>>;
 
 static mut SERVER_HANDLE: Option<ServerHandle> = None;
-static mut WS_STREAM: Option<WsStream> = None;
 static mut CLIENT_CONNECTIONS: Option<ClientConnections> = None;
 static mut SUBSCRIPTIONS: Option<Subscriptions> = None;
-static mut PARTIAL_CONNECTIONS: Option<PartialConnections> = None;
 static mut SERVER_STATE: Option<ServerStateHandle> = None;
 
-// Server configuration options
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerOptions {
     pub port: u16,
-    pub wss: Option<WssServerOptions>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WssServerOptions {
-    pub path_to_cert: Option<String>,
-    pub path_to_key: Option<String>,
-    pub path_to_pfx: Option<String>,
-    pub passphrase: Option<String>,
 }
 
 impl Default for ServerOptions {
     fn default() -> Self {
-        Self {
-            port: 9090,
-            wss: None,
-        }
+        Self { port: 9090 }
     }
 }
 
-// Server state management
 #[derive(Debug, Clone)]
 pub struct ServerState {
     pub started: bool,
     pub options: ServerOptions,
-    pub keep_alive_handle: Arc<TokioMutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
 }
 
 impl Default for ServerState {
@@ -115,94 +92,53 @@ impl Default for ServerState {
         Self {
             started: false,
             options: ServerOptions::default(),
-            keep_alive_handle: Arc::new(TokioMutex::new(None)),
         }
     }
 }
+
+// --- State Accessors ---
 
 pub fn get_server_handle() -> &'static ServerHandle {
     unsafe {
-        if SERVER_HANDLE.is_none() {
-            SERVER_HANDLE = Some(Arc::new(Mutex::new(None)));
-        }
-        SERVER_HANDLE.as_ref().unwrap()
-    }
-}
-
-pub fn get_ws_stream() -> &'static WsStream {
-    unsafe {
-        if WS_STREAM.is_none() {
-            WS_STREAM = Some(Arc::new(TokioMutex::new(None)));
-        }
-        WS_STREAM.as_ref().unwrap()
+        SERVER_HANDLE.get_or_insert_with(|| Arc::new(Mutex::new(None)))
     }
 }
 
 pub fn get_client_connections() -> &'static ClientConnections {
     unsafe {
-        if CLIENT_CONNECTIONS.is_none() {
-            CLIENT_CONNECTIONS = Some(Arc::new(TokioMutex::new(HashMap::new())));
-        }
-        CLIENT_CONNECTIONS.as_ref().unwrap()
+        CLIENT_CONNECTIONS.get_or_insert_with(|| Arc::new(TokioMutex::new(HashMap::new())))
     }
 }
 
 pub fn get_subscriptions() -> &'static Subscriptions {
     unsafe {
-        if SUBSCRIPTIONS.is_none() {
-            SUBSCRIPTIONS = Some(Arc::new(TokioMutex::new(Vec::new())));
-        }
-        SUBSCRIPTIONS.as_ref().unwrap()
-    }
-}
-
-pub fn get_partial_connections() -> &'static PartialConnections {
-    unsafe {
-        if PARTIAL_CONNECTIONS.is_none() {
-            PARTIAL_CONNECTIONS = Some(Arc::new(TokioMutex::new(Vec::new())));
-        }
-        PARTIAL_CONNECTIONS.as_ref().unwrap()
+        SUBSCRIPTIONS.get_or_insert_with(|| Arc::new(TokioMutex::new(Vec::new())))
     }
 }
 
 pub fn get_server_state() -> &'static ServerStateHandle {
     unsafe {
-        if SERVER_STATE.is_none() {
-            SERVER_STATE = Some(Arc::new(TokioMutex::new(ServerState::default())));
-        }
-        SERVER_STATE.as_ref().unwrap()
+        SERVER_STATE.get_or_insert_with(|| Arc::new(TokioMutex::new(ServerState::default())))
     }
 }
 
-// Configure server options
+// --- Public API ---
+
 pub async fn configure_server(options: ServerOptions) {
     let server_state = get_server_state();
     let mut state = server_state.lock().await;
     state.options = options;
 }
 
-// Check if server is started
-pub async fn is_server_started() -> bool {
-    let server_state = get_server_state();
-    let state = server_state.lock().await;
-    state.started
-}
-
 pub fn start_server(app_handle: AppHandle) {
     let server_handle = get_server_handle();
     let server_state = get_server_state();
-    
-    // Stop existing server if running
-    {
-        let mut guard = server_handle.lock().unwrap();
-        if let Some(handle) = guard.take() {
-            println!("Stopping existing server");
-            handle.abort();
-            app_handle.emit("stop", "stop").unwrap();
-        }
+
+    if let Some(handle) = server_handle.lock().unwrap().take() {
+        println!("Stopping existing server");
+        handle.abort();
     }
-    
-    // Update server state
+
     {
         let mut state = server_state.blocking_lock();
         state.started = true;
@@ -210,21 +146,12 @@ pub fn start_server(app_handle: AppHandle) {
     }
 
     let handle = async_runtime::spawn(async move {
-        // Get server options
-        let server_state = get_server_state();
-        let port = {
-            let state = server_state.lock().await;
-            state.options.port
-        };
-        
+        let port = get_server_state().lock().await.options.port;
         let listener = match TcpListener::bind(format!("0.0.0.0:{}", port)).await {
             Ok(listener) => listener,
             Err(e) => {
-                if e.kind() == std::io::ErrorKind::AddrInUse || e.to_string().contains("EADDRINUSE") {
-                    {
-                        let mut state = server_state.lock().await;
-                        state.started = false;
-                    }
+                if e.kind() == std::io::ErrorKind::AddrInUse {
+                    get_server_state().lock().await.started = false;
                     app_handle.emit("portUnavailable", port).unwrap();
                 } else {
                     println!("Error starting server: {}", e);
@@ -233,269 +160,22 @@ pub fn start_server(app_handle: AppHandle) {
             }
         };
         println!("WebSocket server started: ws://0.0.0.0:{}", port);
-        
-        
-        // Store keep alive handle
-        {
-            let mut state = server_state.lock().await;
-            let mut handle_guard = state.keep_alive_handle.lock().await;
 
-            if let Some(existing_handle) = handle_guard.take() {
-                existing_handle.abort();
-            }
-
-            let keep_alive_handle = start_keep_alive(app_handle.clone());
-
-            *handle_guard = Some(keep_alive_handle);
-        }
-
-        let mut connection_id = 0;
-        let mut message_id = 0;
-
-        let format_address = |addr: &std::net::SocketAddr| {
-            if addr.is_ipv4() {
-                format!("::ffff:{}", addr.ip())
-            } else {
-                addr.to_string()
-            }
-        };
-
+        let mut connection_id_counter: u32 = 0;
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
+                    connection_id_counter += 1;
                     let app_handle = app_handle.clone();
-                    let current_connection_id = connection_id;
-                    connection_id += 1;
-
-                    async_runtime::spawn(async move {
-                        let client_connections = get_client_connections();
-                        let subscriptions = get_subscriptions();
-                        let partial_connections = get_partial_connections();
-                        
-                        let ws = match accept_async(stream).await {
-                            Ok(ws) => Arc::new(TokioMutex::new(ws)),
-                            Err(e) => {
-                                println!("Error during WebSocket handshake: {}", e);
-                                return;
-                            }
-                        };
-                        println!("WebSocket connection accepted from {}", format_address(&addr));
-
-                        // Create and store partialConnection
-                        let partial_connection = PartialConnection {
-                            id: current_connection_id,
-                            address: format_address(&addr),
-                            socket: ws.clone(),
-                        };
-
-                        // Add to partialConnections
-                        {
-                            let mut partials = partial_connections.lock().await;
-                            partials.push(partial_connection.clone());
-                        }
-
-                        // Emit connect event
-                        app_handle.emit("connect", &partial_connection).unwrap();
-
-                        let mut current_client_id = None;
-
-                        loop {
-                            let msg = {
-                                let mut ws_guard = ws.lock().await;
-                                ws_guard.next().await
-                            };
-
-                            match msg {
-                                Some(Ok(msg)) => {
-                                    if msg.is_text() {
-                                        let text = msg.to_text().unwrap_or_default();
-                                        if text.is_empty() { continue; }
-
-                                        println!("Received text: {}", text);
-                                        
-                                        if let Ok(mut cmd) = serde_json::from_str::<Command>(text) {
-                                            message_id += 1;
-                                            cmd.message_id = Some(message_id);
-                                            cmd.connection_id = Some(current_connection_id);
-
-                                            // Handle client.intro
-                                            if cmd.r#type == "client.intro" {
-                                                println!("=== Processing client.intro ===");
-                                                println!("Client ID: {:?}", cmd.payload.get("clientId"));
-                                                println!("Payload: {:?}", cmd.payload);
-
-                                                // Find partialConnection
-                                                let mut partials = partial_connections.lock().await;
-                                                let part_conn_opt = partials.iter().find(|c| c.id == current_connection_id).cloned();
-
-                                                // Add address to payload
-                                                if let Some(part_conn) = &part_conn_opt {
-                                                    if let Some(payload) = cmd.payload.as_object_mut() {
-                                                        payload.insert("address".to_string(), serde_json::Value::String(part_conn.address.clone()));
-                                                    }
-                                                }
-
-                                                // Remove from partialConnections
-                                                partials.retain(|c| c.id != current_connection_id);
-
-                                                // Handle clientId
-                                                let mut client_id = cmd.payload.get("clientId").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                                println!("client_id: {:?}", client_id);
-                                                if client_id.is_none() || client_id.as_ref().map_or(false, |id| id == "~~~ null ~~~") {
-                                                    println!("No clientId found, generating new one");
-                                                    client_id = Some(Uuid::new_v4().to_string());
-                                                    // Send clientId to client
-                                                    let response = serde_json::json!({
-                                                        "type": "setClientId",
-                                                        "payload": client_id.as_ref().unwrap()
-                                                    });
-                                                    // We need to lock the socket again to send
-                                                    let mut ws_guard = ws.lock().await;
-                                                    if let Err(e) = ws_guard.send(Message::Text(response.to_string().into())).await {
-                                                        println!("Error sending clientId: {}", e);
-                                                    }
-                                                    println!("Sent clientId to client: {}", client_id.as_ref().unwrap());
-                                                } else {
-                                                    // If a socket with the same clientId already exists, close and remove the old connection
-                                                    let mut connections = client_connections.lock().await;
-                                                    if let Some(client_id_str) = client_id.as_deref() {
-                                                        if let Some(existing_conn) = connections.remove(client_id_str) {
-                                                            println!("Closing existing connection for client ID: {}", client_id_str);
-                                                            let mut socket = existing_conn.socket.lock().await;
-                                                            let _ = socket.close(None).await;
-                                                        }
-                                                    }
-                                                }
-
-                                                let client_id = client_id.unwrap();
-                                                current_client_id = Some(client_id.clone());
-                                                cmd.client_id = Some(client_id.clone());
-
-                                                // Create connection object and add to connections
-                                                let mut connections = client_connections.lock().await;
-                                                let connection = ClientConnection {
-                                                    id: current_connection_id,
-                                                    address: format_address(&addr),
-                                                    client_id: client_id.clone(),
-                                                    socket: ws.clone(),
-                                                };
-                                                connections.insert(client_id.clone(), connection.clone());
-
-                                                // Emit connectionEstablished event
-                                                app_handle.emit("connectionEstablished", &serde_json::json!({
-                                                    "id": current_connection_id,
-                                                    "address": format_address(&addr),
-                                                    "clientId": client_id,
-                                                    "payload": cmd.payload,
-                                                })).unwrap();
-
-                                                println!("=== Sending current subscriptions ===");
-                                                let subs = subscriptions.lock().await;
-                                                println!("Current subscriptions: {:?}", *subs);
-                                            }
-
-                                            // Set client_id for all messages if current_client_id exists
-                                            if let Some(client_id) = &current_client_id {
-                                                cmd.client_id = Some(client_id.clone());
-                                            }
-
-                                            // Handle state.values.subscribe
-                                            if cmd.r#type == "state.values.subscribe" {
-                                                println!("=== Processing state.values.subscribe ===");
-                                                println!("Subscribe paths: {:?}", cmd.payload);
-                                                
-                                                // Add paths sent by client to subscription list
-                                                if let Some(paths) = cmd.payload.get("paths") {
-                                                    if let Some(paths_array) = paths.as_array() {
-                                                        let mut subs = subscriptions.lock().await;
-                                                        for path in paths_array {
-                                                            if let Some(path_str) = path.as_str() {
-                                                                if !subs.contains(&path_str.to_string()) {
-                                                                    subs.push(path_str.to_string());
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            
-                                                // Send subscription info to all clients
-                                                let command = CommandWithClientId {
-                                                    r#type: "state.values.subscribe".to_string(),
-                                                    payload: serde_json::json!({ "paths": *subscriptions.lock().await }),
-                                                    client_id: cmd.client_id.clone().unwrap(),
-                                                    important: false,
-                                                    date: Some(chrono::Utc::now().to_rfc3339()),
-                                                    delta_time: Some(0),
-                                                };
-                                                send_command(app_handle.clone(), command).await;
-                                            }
-
-                                            // Handle state.values.change
-                                            if cmd.r#type == "state.values.change" {
-                                                println!("=== Processing state.values.change ===");
-                                                println!("Changes: {:?}", cmd.payload);
-                                                if let Some(changes) = cmd.payload.get("changes") {
-                                                    if let Some(paths) = changes.as_array() {
-                                                        let mut subs = subscriptions.lock().await;
-                                                        subs.clear(); // Clear existing subscription list
-                                                        for path in paths {
-                                                            if let Some(path_str) = path.get("path").and_then(|p| p.as_str()) {
-                                                                subs.push(path_str.to_string());
-                                                            }
-                                                        }
-                                                        println!("Current subscriptions: {:?}", *subs);
-                                                    }
-                                                }
-                                            }
-
-                                            // Handle state.backup.response
-                                            if cmd.r#type == "state.backup.response" {
-                                                if let Some(payload) = cmd.payload.as_object_mut() {
-                                                    payload.insert("name".to_string(), serde_json::Value::Null);
-                                                }
-                                            }
-
-                                            println!("=== Emitting command ===");
-                                            println!("Command type: {}", cmd.r#type);
-                                            println!("Command payload: {:?}", cmd.payload);
-                                            app_handle.emit("command", &cmd).unwrap();
-                                        } else {
-                                            println!("Failed to parse command: {}", text);
-                                        }
-                                    } else if msg.is_close() {
-                                        println!("Received close message");
-                                        break;
-                                    }
-                                }
-                                Some(Err(e)) => {
-                                    println!("WebSocket error: {}", e);
-                                    break;
-                                }
-                                None => {
-                                    // Stream has ended
-                                    break;
-                                }
-                            }
-                        }
-
-                        // --- Disconnection logic ---
-                        println!("Client disconnected: {}", format_address(&addr));
-
-                        // Remove from partialConnections
-                        {
-                            let mut partials = partial_connections.lock().await;
-                            partials.retain(|conn| conn.id != current_connection_id);
-                        }
-
-                        // Remove from connections and emit disconnect event
-                        if let Some(client_id) = current_client_id {
-                            let mut connections = client_connections.lock().await;
-                            if let Some(conn) = connections.remove(&client_id) {
-                                println!("Emitting disconnect for client ID: {}", client_id);
-                                app_handle.emit("disconnect", &conn).unwrap();
-                            }
-                        }
-                    });
+                    
+                    // Spawn an actor for each new connection.
+                    // The actor manages the entire lifecycle of the connection.
+                    async_runtime::spawn(client_actor(
+                        app_handle,
+                        stream,
+                        connection_id_counter,
+                        addr,
+                    ));
                 }
                 Err(e) => {
                     println!("Error accepting connection: {}", e);
@@ -504,187 +184,240 @@ pub fn start_server(app_handle: AppHandle) {
         }
     });
 
-    let server_handle = get_server_handle();
-    let mut guard = server_handle.lock().unwrap();
-    *guard = Some(handle);
+    *server_handle.lock().unwrap() = Some(handle);
 }
 
 pub async fn stop_server(app_handle: AppHandle) {
     println!("Stopping server");
-    let server_handle = get_server_handle();
-    let server_state = get_server_state();
-    
-    // Stop keep alive task
-    {
-        let mut state = server_state.lock().await;
-        {
-            let mut handle_guard = state.keep_alive_handle.lock().await;
-            if let Some(keep_alive_handle) = handle_guard.take() {
-                keep_alive_handle.abort();
-            }
-        }
-        state.started = false;
-    }
-    
-    let handle = {
-        let mut guard = server_handle.lock().unwrap();
-        guard.take()
-    };
-    
-    if let Some(handle) = handle {
+    if let Some(handle) = get_server_handle().lock().unwrap().take() {
         handle.abort();
-        
-        // Wait for server to stop
         let _ = handle.await;
-        
-        // Get port for logging
-        let port = {
-            let state = server_state.lock().await;
-            state.options.port
-        };
-        println!("WebSocket server stopped: ws://0.0.0.0:{}", port);
-        
-        // Clean up client connections
-        let client_connections = get_client_connections();
-        let mut connections = client_connections.lock().await;
-        connections.clear();
-        
-        // Clean up partial connections
-        let partial_connections = get_partial_connections();
-        let mut partials = partial_connections.lock().await;
-        partials.clear();
-        
-        // Clear subscriptions
-        let subscriptions = get_subscriptions();
-        let mut subs = subscriptions.lock().await;
-        subs.clear();
-        
-        app_handle.emit("stop", "stop").unwrap();
     }
+
+    get_server_state().lock().await.started = false;
+    get_client_connections().lock().await.clear();
+    get_subscriptions().lock().await.clear();
+    
+    app_handle.emit("stop", "stop").unwrap();
 }
 
 pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
-    let client_connections = get_client_connections();
-    let connections = client_connections.lock().await;
+    let connections = get_client_connections().lock().await;
     
-    for (_, conn) in connections.iter() {
-        if command.client_id.is_empty() || conn.client_id == command.client_id {
-            // Maintain original command format - remove hardcoded values
-            let command_json = serde_json::json!({
-                "type": command.r#type,
-                "payload": command.payload
-                // Remove important, date, deltaTime fields
-            });
-            
-            let message = Message::Text(command_json.to_string().into());
-            let mut socket = conn.socket.lock().await;
-            if let Err(e) = socket.send(message).await {
-                println!("Error sending message to client {}: {}", conn.client_id, e);
+    let target_client_id = command.client_id.clone();
+    let command_json = serde_json::json!({
+        "type": command.r#type,
+        "payload": command.payload
+    });
+    let message = Message::Text(command_json.to_string().into());
+
+    if target_client_id.is_empty() {
+        // Broadcast to all clients
+        for conn in connections.values() {
+            if let Err(e) = conn.sender.send(message.clone()).await {
+                println!("Failed to send message to client {}: {}", conn.client_id, e);
             }
+        }
+    } else if let Some(conn) = connections.get(&target_client_id) {
+        // Send to a specific client
+        if let Err(e) = conn.sender.send(message).await {
+            println!("Failed to send message to client {}: {}", conn.client_id, e);
         }
     }
 }
 
-pub async fn send_custom_message(app_handle: AppHandle, value: String, client_id: Option<String>) {
-    let command = CommandWithClientId {
-        r#type: "custom".to_string(),
-        payload: serde_json::Value::String(value),
-        client_id: client_id.unwrap_or_default(),
-        important: false,
-        date: Some(chrono::Utc::now().to_rfc3339()),
-        delta_time: Some(0),
+// --- The Actor ---
+
+/// Manages a single WebSocket connection.
+/// This function is spawned as a separate task for each client.
+async fn client_actor(
+    app_handle: AppHandle,
+    stream: TcpStream,
+    id: u32,
+    addr: SocketAddr,
+) {
+    let ws_stream = match accept_async(stream).await {
+        Ok(ws) => ws,
+        Err(e) => {
+            println!("[{}] Error during WebSocket handshake: {}", id, e);
+            return;
+        }
     };
-    send_command(app_handle, command).await;
-}
-
-pub async fn state_values_subscribe(app_handle: AppHandle, paths: Vec<String>) {
-    let subscriptions = get_subscriptions();
-    let mut subs = subscriptions.lock().await;
     
-    // Replace existing subscription list with new paths
-    *subs = paths;
+    let address_str = format_address(&addr);
+    println!("[{}] WebSocket connection accepted from {}", id, address_str);
+    app_handle.emit("connect", &serde_json::json!({ "id": id, "address": address_str })).unwrap();
+
+    let (mut writer, mut reader) = ws_stream.split();
+    let (tx, mut rx) = mpsc::channel::<Message>(32);
     
-    // Broadcast subscription info to all clients
-    let command = CommandWithClientId {
-        r#type: "state.values.subscribe".to_string(),
-        payload: serde_json::json!({ "paths": *subs }),
-        client_id: String::new(), // Empty string to send to all clients
-        important: false,
-        date: Some(chrono::Utc::now().to_rfc3339()),
-        delta_time: Some(0),
-    };
-    send_command(app_handle, command).await;
-}
+    let mut current_client_id: Option<String> = None;
+    let mut message_id_counter: u32 = 0;
+    let mut keep_alive_interval = tokio::time::interval(Duration::from_secs(15));
 
-pub async fn state_values_unsubscribe(app_handle: AppHandle, path: String) {
-    let subscriptions = get_subscriptions();
-    let mut subs = subscriptions.lock().await;
-    
-    if let Some(pos) = subs.iter().position(|x| x == &path) {
-        subs.remove(pos);
-        
-        let command = CommandWithClientId {
-            r#type: "state.values.subscribe".to_string(),
-            payload: serde_json::json!({ "paths": *subs }),
-            client_id: String::new(),
-            important: false,
-            date: Some(chrono::Utc::now().to_rfc3339()),
-            delta_time: Some(0),
-        };
-        send_command(app_handle, command).await;
-    }
-}
-
-pub async fn state_values_clear_subscriptions(app_handle: AppHandle) {
-    let subscriptions = get_subscriptions();
-    let mut subs = subscriptions.lock().await;
-    subs.clear();
-    
-    let command = CommandWithClientId {
-        r#type: "state.values.subscribe".to_string(),
-        payload: serde_json::json!({ "paths": [] }),
-        client_id: String::new(),
-        important: false,
-        date: Some(chrono::Utc::now().to_rfc3339()),
-        delta_time: Some(0),
-    };
-    send_command(app_handle, command).await;
-}
-
-// Keep alive functionality - sends ping to all connected clients every 30 seconds
-fn start_keep_alive(app_handle: AppHandle) -> tauri::async_runtime::JoinHandle<()> {
-    async_runtime::spawn(async move {
-        let mut interval = interval(Duration::from_secs(30));
-        
-        loop {
-            interval.tick().await;
-            
-            let client_connections = get_client_connections();
-            let mut connections = client_connections.lock().await;
-            let mut disconnected_clients = Vec::new();
-
-            for (client_id, conn) in connections.iter() {
-                let mut socket = conn.socket.lock().await;
-                if let Err(e) = socket.send(Message::Ping(vec![].into())).await {
-                    println!("Error sending ping to client {}, assuming disconnection: {}", conn.client_id, e);
-                    disconnected_clients.push(client_id.clone());
+    loop {
+        tokio::select! {
+            // 1. A message is received from the internal channel to be sent to the client.
+            Some(msg_to_send) = rx.recv() => {
+                if writer.send(msg_to_send).await.is_err() {
+                    println!("[{}] Failed to send message. Closing connection.", id);
+                    break;
                 }
             }
 
-            if !disconnected_clients.is_empty() {
-                for client_id in disconnected_clients {
-                    if let Some(conn) = connections.remove(&client_id) {
-                        app_handle.emit("disconnect", &conn).unwrap();
+            // 2. A message is received from the client's WebSocket connection.
+            Some(msg_result) = reader.next() => {
+                match msg_result {
+                    Ok(msg) => {
+                        if handle_incoming_message(
+                            msg,
+                            &app_handle,
+                            id,
+                            &mut message_id_counter,
+                            &mut current_client_id,
+                            &address_str,
+                            tx.clone()
+                        ).await.is_err() {
+                            // A critical error occurred or a close message was received.
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        println!("[{}] WebSocket read error: {}. Closing connection.", id, e);
+                        break;
                     }
                 }
             }
+
+            // 3. The keep-alive interval ticks.
+            _ = keep_alive_interval.tick() => {
+                if writer.send(Message::Ping(vec![].into())).await.is_err() {
+                    println!("[{}] Failed to send ping. Closing connection.", id);
+                    break;
+                }
+            }
         }
-    })
+    }
+
+    // --- Cleanup Logic ---
+    println!("[{}] Actor is shutting down. Cleaning up resources.", id);
+    if let Some(client_id) = current_client_id {
+        let mut connections = get_client_connections().lock().await;
+        if let Some(conn) = connections.remove(&client_id) {
+            let disconnect_payload = serde_json::json!({ 
+                "id": conn.id,
+                "address": conn.address,
+                "clientId": conn.client_id
+            });
+            app_handle.emit("disconnect", disconnect_payload).unwrap();
+            println!("[{}] Client {} disconnected.", id, client_id);
+        }
+    }
 }
 
-// Helper function to create server with options
-pub async fn create_server(options: Option<ServerOptions>) -> Result<(), Box<dyn std::error::Error>> {
-    let options = options.unwrap_or_default();
-    configure_server(options).await;
+/// Processes a single incoming message from a client.
+/// Returns `Err(())` to signal that the connection should be closed.
+async fn handle_incoming_message(
+    msg: Message,
+    app_handle: &AppHandle,
+    connection_id: u32,
+    message_id: &mut u32,
+    current_client_id: &mut Option<String>,
+    address: &str,
+    sender: mpsc::Sender<Message>,
+) -> Result<(), ()> {
+    match msg {
+        Message::Text(text) => {
+            let mut cmd: Command = match serde_json::from_str(&text) {
+                Ok(cmd) => cmd,
+                Err(e) => {
+                    println!("[{}] Failed to parse command: {}. Raw: {}", connection_id, e, text);
+                    return Ok(()); // Don't close connection for a single bad command.
+                }
+            };
+
+            *message_id += 1;
+            cmd.message_id = Some(*message_id);
+            cmd.connection_id = Some(connection_id);
+
+            // --- client.intro is a special case that establishes the connection ---
+            if cmd.r#type == "client.intro" {
+                let mut client_id = cmd.payload.get("clientId").and_then(|v| v.as_str()).map(String::from);
+
+                if client_id.is_none() || client_id.as_deref() == Some("~~~ null ~~~") {
+                    client_id = Some(Uuid::new_v4().to_string());
+                    let response = serde_json::json!({
+                        "type": "setClientId",
+                        "payload": client_id.as_ref().unwrap()
+                    });
+                    let _ = sender.send(Message::Text(response.to_string().into())).await;
+                }
+
+                let final_client_id = client_id.unwrap();
+                *current_client_id = Some(final_client_id.clone());
+                cmd.client_id = Some(final_client_id.clone());
+
+                let connection = ClientConnection {
+                    id: connection_id,
+                    address: address.to_string(),
+                    client_id: final_client_id.clone(),
+                    sender: sender.clone(),
+                };
+                
+                let mut connections = get_client_connections().lock().await;
+                if let Some(old_conn) = connections.insert(final_client_id.clone(), connection) {
+                    println!("[{}] Client {} reconnected, closing old connection.", connection_id, old_conn.client_id);
+                    // The old actor will die because its channel sender is dropped.
+                }
+                
+                app_handle.emit("connectionEstablished", &cmd).unwrap();
+            }
+
+            if let Some(client_id) = current_client_id {
+                cmd.client_id = Some(client_id.clone());
+            }
+
+            // Handle other command types
+            if cmd.r#type == "state.values.subscribe" {
+                if let Some(paths) = cmd.payload.get("paths").and_then(|p| p.as_array()) {
+                    let mut subs = get_subscriptions().lock().await;
+                    for path in paths {
+                        if let Some(path_str) = path.as_str() {
+                            if !subs.contains(&path_str.to_string()) {
+                                subs.push(path_str.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            app_handle.emit("command", &cmd).unwrap();
+        }
+        Message::Close(_) => {
+            println!("[{}] Received close frame.", connection_id);
+            return Err(()); // Signal to close the connection.
+        }
+        Message::Ping(_) => {
+            // Tungstenite handles pong automatically. We can also send one manually if needed.
+            let _ = sender.send(Message::Pong(vec![].into())).await;
+        }
+        Message::Pong(_) => {
+            // Pong received, connection is alive.
+        }
+        Message::Binary(_) => {
+            println!("[{}] Received unexpected binary message.", connection_id);
+        }
+        Message::Frame(_) => {
+            // Ignore raw frames, they're handled by tungstenite
+        }
+    }
     Ok(())
+}
+
+fn format_address(addr: &SocketAddr) -> String {
+    if addr.is_ipv4() {
+        format!("::ffff:{}", addr.ip())
+    } else {
+        addr.to_string()
+    }
 }
