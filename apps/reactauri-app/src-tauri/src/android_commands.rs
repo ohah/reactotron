@@ -10,6 +10,7 @@ pub async fn get_device_list(app_handle: tauri::AppHandle) -> Result<String, Str
     let result = String::from_utf8(output.stdout)
         .map_err(|e| format!("Failed to parse adb output: {}", e))?;
     
+    #[cfg(debug_assertions)]
     println!("get_device_list: {}", result);
     let _ = app_handle.emit("device_list", result.clone());
     
@@ -25,9 +26,11 @@ pub async fn reverse_tunnel_device(device_id: String, reactotron_port: u16, metr
         .map_err(|e| format!("Failed to reverse tunnel reactotron port: {}", e))?;
     
     if !reactauri_result.status.success() {
+        #[cfg(debug_assertions)]
         println!("Reactotron reverse tunnel failed: {:?}", reactauri_result);
         return Err(format!("Reactotron reverse tunnel failed: {}", String::from_utf8_lossy(&reactauri_result.stderr)));
     } else {
+        #[cfg(debug_assertions)]
         println!("Reactotron reverse tunnel success: {:?}", reactauri_result);
     }
     
@@ -38,9 +41,11 @@ pub async fn reverse_tunnel_device(device_id: String, reactotron_port: u16, metr
         .map_err(|e| format!("Failed to reverse tunnel metro port: {}", e))?;
     
     if !metro_result.status.success() {
+        #[cfg(debug_assertions)]
         println!("Metro reverse tunnel failed: {:?}", metro_result);
         return Err(format!("Metro reverse tunnel failed: {}", String::from_utf8_lossy(&metro_result.stderr)));
     } else {
+        #[cfg(debug_assertions)]
         println!("Metro reverse tunnel success: {:?}", metro_result);
     }
     
@@ -53,11 +58,12 @@ pub async fn reload_app(device_id: String) -> Result<(), String> {
         .args(["-s", &device_id, "shell", "input", "text", "\"RR\""])
         .output()
         .map_err(|e| format!("Failed to reload app: {}", e))?;
-    
+    #[cfg(debug_assertions)]
     println!("reload_app: {:?}", result);
     if !result.status.success() {
         return Err(format!("Reload app failed: {}", String::from_utf8_lossy(&result.stderr)));
     } else {
+        #[cfg(debug_assertions)]
         println!("Reload app success: {:?}", result.stdout);
     }
     
@@ -72,9 +78,11 @@ pub async fn shake_device(device_id: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to shake device: {}", e))?;
     
     if !result.status.success() {
+        #[cfg(debug_assertions)]
         println!("Shake device failed: {:?}", result);
         return Err(format!("Shake device failed: {}", String::from_utf8_lossy(&result.stderr)));
     } else {
+        #[cfg(debug_assertions)]
         println!("Shake device success: {:?}", result);
     }
     
@@ -100,12 +108,14 @@ pub fn start_device_tracking_internal(app_handle: tauri::AppHandle) -> Result<()
             
             for line in reader.lines() {
                 if let Ok(line) = line {
+                    #[cfg(debug_assertions)]
                     println!("Got adb track-devices output: {}", line);
                     // TypeScript 버전과 동일하게 디바이스 목록을 가져와서 프론트엔드에 전송
                     if let Ok(output) = std::process::Command::new("adb")
                         .arg("devices")
                         .output() {
                         if let Ok(device_list) = String::from_utf8(output.stdout) {
+                            #[cfg(debug_assertions)]
                             println!("Got adb device lis 전송t: {}", device_list);
                             let _ = app_handle_clone.emit("device_list", device_list);
                         }
@@ -120,6 +130,7 @@ pub fn start_device_tracking_internal(app_handle: tauri::AppHandle) -> Result<()
             
             for line in reader.lines() {
                 if let Ok(line) = line {
+                    #[cfg(debug_assertions)]
                     println!("adb track-devices stderr: {}", line);
                 }
             }
@@ -127,6 +138,7 @@ pub fn start_device_tracking_internal(app_handle: tauri::AppHandle) -> Result<()
         
         let status = child.wait().expect("Failed to wait for adb process");
         if !status.success() {
+            #[cfg(debug_assertions)]
             println!("adb track-devices process exited with status: {}", status);
         }
     });
