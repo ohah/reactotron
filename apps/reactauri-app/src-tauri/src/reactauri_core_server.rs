@@ -135,6 +135,7 @@ pub fn start_server(app_handle: AppHandle) {
     let server_state = get_server_state();
 
     if let Some(handle) = server_handle.lock().unwrap().take() {
+        #[cfg(debug_assertions)]
         println!("Stopping existing server");
         handle.abort();
     }
@@ -154,11 +155,13 @@ pub fn start_server(app_handle: AppHandle) {
                     get_server_state().lock().await.started = false;
                     app_handle.emit("portUnavailable", port).unwrap();
                 } else {
+                    #[cfg(debug_assertions)]
                     println!("Error starting server: {}", e);
                 }
                 return;
             }
         };
+        #[cfg(debug_assertions)]
         println!("WebSocket server started: ws://0.0.0.0:{}", port);
 
         let mut connection_id_counter: u32 = 0;
@@ -178,6 +181,7 @@ pub fn start_server(app_handle: AppHandle) {
                     ));
                 }
                 Err(e) => {
+                    #[cfg(debug_assertions)]
                     println!("Error accepting connection: {}", e);
                 }
             }
@@ -188,6 +192,7 @@ pub fn start_server(app_handle: AppHandle) {
 }
 
 pub async fn stop_server(app_handle: AppHandle) {
+    #[cfg(debug_assertions)]
     println!("Stopping server");
     if let Some(handle) = get_server_handle().lock().unwrap().take() {
         handle.abort();
@@ -215,12 +220,14 @@ pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
         // Broadcast to all clients
         for conn in connections.values() {
             if let Err(e) = conn.sender.send(message.clone()).await {
+                #[cfg(debug_assertions)]
                 println!("Failed to send message to client {}: {}", conn.client_id, e);
             }
         }
     } else if let Some(conn) = connections.get(&target_client_id) {
         // Send to a specific client
         if let Err(e) = conn.sender.send(message).await {
+            #[cfg(debug_assertions)]
             println!("Failed to send message to client {}: {}", conn.client_id, e);
         }
     }
@@ -239,12 +246,14 @@ async fn client_actor(
     let ws_stream = match accept_async(stream).await {
         Ok(ws) => ws,
         Err(e) => {
+            #[cfg(debug_assertions)]
             println!("[{}] Error during WebSocket handshake: {}", id, e);
             return;
         }
     };
     
     let address_str = format_address(&addr);
+    #[cfg(debug_assertions)]
     println!("[{}] WebSocket connection accepted from {}", id, address_str);
     app_handle.emit("connect", &serde_json::json!({ "id": id, "address": address_str })).unwrap();
 
@@ -260,6 +269,7 @@ async fn client_actor(
             // 1. A message is received from the internal channel to be sent to the client.
             Some(msg_to_send) = rx.recv() => {
                 if writer.send(msg_to_send).await.is_err() {
+                    #[cfg(debug_assertions)]
                     println!("[{}] Failed to send message. Closing connection.", id);
                     break;
                 }
@@ -283,6 +293,7 @@ async fn client_actor(
                         }
                     }
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         println!("[{}] WebSocket read error: {}. Closing connection.", id, e);
                         break;
                     }
@@ -292,6 +303,7 @@ async fn client_actor(
             // 3. The keep-alive interval ticks.
             _ = keep_alive_interval.tick() => {
                 if writer.send(Message::Ping(vec![].into())).await.is_err() {
+                    #[cfg(debug_assertions)]
                     println!("[{}] Failed to send ping. Closing connection.", id);
                     break;
                 }
@@ -300,6 +312,7 @@ async fn client_actor(
     }
 
     // --- Cleanup Logic ---
+    #[cfg(debug_assertions)]
     println!("[{}] Actor is shutting down. Cleaning up resources.", id);
     if let Some(client_id) = current_client_id {
         let mut connections = get_client_connections().lock().await;
@@ -310,6 +323,7 @@ async fn client_actor(
                 "clientId": conn.client_id
             });
             app_handle.emit("disconnect", disconnect_payload).unwrap();
+            #[cfg(debug_assertions)]
             println!("[{}] Client {} disconnected.", id, client_id);
         }
     }
@@ -331,6 +345,7 @@ async fn handle_incoming_message(
             let mut cmd: Command = match serde_json::from_str(&text) {
                 Ok(cmd) => cmd,
                 Err(e) => {
+                    #[cfg(debug_assertions)]
                     println!("[{}] Failed to parse command: {}. Raw: {}", connection_id, e, text);
                     return Ok(()); // Don't close connection for a single bad command.
                 }
@@ -366,6 +381,7 @@ async fn handle_incoming_message(
                 
                 let mut connections = get_client_connections().lock().await;
                 if let Some(old_conn) = connections.insert(final_client_id.clone(), connection) {
+                    #[cfg(debug_assertions)]
                     println!("[{}] Client {} reconnected, closing old connection.", connection_id, old_conn.client_id);
                     // The old actor will die because its channel sender is dropped.
                 }
@@ -394,6 +410,7 @@ async fn handle_incoming_message(
             app_handle.emit("command", &cmd).unwrap();
         }
         Message::Close(_) => {
+            #[cfg(debug_assertions)]
             println!("[{}] Received close frame.", connection_id);
             return Err(()); // Signal to close the connection.
         }
@@ -405,6 +422,7 @@ async fn handle_incoming_message(
             // Pong received, connection is alive.
         }
         Message::Binary(_) => {
+            #[cfg(debug_assertions)]
             println!("[{}] Received unexpected binary message.", connection_id);
         }
         Message::Frame(_) => {

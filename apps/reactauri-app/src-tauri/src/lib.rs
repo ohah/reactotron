@@ -35,6 +35,7 @@ async fn send_command(
         date: Some(chrono::Utc::now().to_rfc3339()),
         delta_time: Some(0),
     };
+    #[cfg(debug_assertions)]
     println!("send_command: {:?}", command);
     reactauri_core_server::send_command(app, command).await;
 }
@@ -67,6 +68,7 @@ pub fn run() {
                         .blocking_show();
                 }
                 "documentation" => {
+                    #[cfg(debug_assertions)]
                     println!("Documentation clicked");
                     // Open URL
                     #[cfg(target_os = "macos")]
@@ -81,6 +83,7 @@ pub fn run() {
                     }
                 }
                 "quit" => {
+                    #[cfg(debug_assertions)]
                     println!("Quit pressed");
                     std::process::exit(0);
                 }
@@ -139,6 +142,7 @@ pub fn run() {
                     }
                 }
                 _ => {
+                    #[cfg(debug_assertions)]
                     println!("unexpected menu event: {}", event.id().0);
                 }
             }
@@ -191,6 +195,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 if let Err(e) = android_commands::start_device_tracking_internal(app_handle) {
+                    #[cfg(debug_assertions)]
                     println!("Failed to start Android device tracking: {}", e);
                 }
             });
