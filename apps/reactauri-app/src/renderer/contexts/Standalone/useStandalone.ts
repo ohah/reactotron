@@ -227,15 +227,12 @@ export function reducer(state: State, action: Action) {
           return
         }
 
-        // Tauri 웹뷰용 커맨드 개수 제한 (최대 5000개)
-        const MAX_COMMANDS = 5000
+        const MAX_COMMANDS = 2000
         
-        // 성능 최적화: 새 커맨드를 맨 앞에 추가
-        connection.commands.unshift(action.payload) // 맨 앞에 추가
+        connection.commands.unshift(action.payload)
         
-        // 제한 초과시 맨 뒤에서 제거
         if (connection.commands.length > MAX_COMMANDS) {
-          connection.commands.pop() // 맨 뒤 제거 (O(1))
+          connection.commands.pop()
         }
       })
     case ActionTypes.ClearConnectionCommands:
