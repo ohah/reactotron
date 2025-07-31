@@ -194,9 +194,9 @@ pub fn run() {
             // Start Android device tracking automatically on app startup
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
-                if let Err(e) = android_commands::start_device_tracking_internal(app_handle) {
+                if let Err(_e) = android_commands::start_device_tracking_internal(app_handle) {
                     #[cfg(debug_assertions)]
-                    println!("Failed to start Android device tracking: {}", e);
+                    println!("Failed to start Android device tracking: {}", _e);
                 }
             });
             

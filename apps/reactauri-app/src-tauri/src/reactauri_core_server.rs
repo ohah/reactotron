@@ -1,13 +1,12 @@
-use futures_util::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime;
 use tauri::AppHandle;
 use tauri::Emitter;
-use tauri::Manager;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{accept_async, WebSocketStream};
+use tokio_tungstenite::accept_async;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -206,7 +205,7 @@ pub async fn stop_server(app_handle: AppHandle) {
     app_handle.emit("stop", "stop").unwrap();
 }
 
-pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
+pub async fn send_command(_app_handle: AppHandle, command: CommandWithClientId) {
     let connections = get_client_connections().lock().await;
     
     let target_client_id = command.client_id.clone();
@@ -219,16 +218,16 @@ pub async fn send_command(app_handle: AppHandle, command: CommandWithClientId) {
     if target_client_id.is_empty() {
         // Broadcast to all clients
         for conn in connections.values() {
-            if let Err(e) = conn.sender.send(message.clone()).await {
+            if let Err(_e) = conn.sender.send(message.clone()).await {
                 #[cfg(debug_assertions)]
-                println!("Failed to send message to client {}: {}", conn.client_id, e);
+                println!("Failed to send message to client {}: {}", conn.client_id, _e);
             }
         }
     } else if let Some(conn) = connections.get(&target_client_id) {
         // Send to a specific client
-        if let Err(e) = conn.sender.send(message).await {
+        if let Err(_e) = conn.sender.send(message).await {
             #[cfg(debug_assertions)]
-            println!("Failed to send message to client {}: {}", conn.client_id, e);
+            println!("Failed to send message to client {}: {}", conn.client_id, _e);
         }
     }
 }
@@ -380,9 +379,9 @@ async fn handle_incoming_message(
                 };
                 
                 let mut connections = get_client_connections().lock().await;
-                if let Some(old_conn) = connections.insert(final_client_id.clone(), connection) {
+                if let Some(_old_conn) = connections.insert(final_client_id.clone(), connection) {
                     #[cfg(debug_assertions)]
-                    println!("[{}] Client {} reconnected, closing old connection.", connection_id, old_conn.client_id);
+                    println!("[{}] Client {} reconnected, closing old connection.", connection_id, final_client_id);
                     // The old actor will die because its channel sender is dropped.
                 }
                 

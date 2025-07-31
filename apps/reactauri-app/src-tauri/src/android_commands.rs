@@ -1,4 +1,4 @@
-use tauri::{ApHandle, Emitter};
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 pub async fn get_device_list(app_handle: tauri::AppHandle) -> Result<String, String> {
