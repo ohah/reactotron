@@ -61,16 +61,22 @@ const keyMap = {
     sequences: ["command+3", "ctrl+3"],
     action: "keyup" as KeyEventName,
   },
+  OpenStorageTab: {
+    name: "Storage tab",
+    group: "Navigation",
+    sequences: ["command+4", "ctrl+4"],
+    action: "keyup" as KeyEventName,
+  },
   OpenReactNativeTab: {
     name: "React Native tab",
     group: "Navigation",
-    sequences: ["command+4", "ctrl+4"],
+    sequences: ["command+5", "ctrl+5"],
     action: "keyup" as KeyEventName,
   },
   OpenCustomCommandsTab: {
     name: "Custom Commands tab",
     group: "Navigation",
-    sequences: ["command+5", "ctrl+5"],
+    sequences: ["command+6", "ctrl+6"],
     action: "keyup" as KeyEventName,
   },
   OpenHelpTab: {
@@ -174,6 +180,9 @@ function KeybindHandler({ children }) {
     },
     OpenReactNativeTab: () => {
       window.location.hash = "/native/overlay"
+    },
+    OpenStorageTab: () => {
+      window.location.hash = "/storage/asyncstorage"
     },
     OpenCustomCommandsTab: () => {
       window.location.hash = "/customCommands"

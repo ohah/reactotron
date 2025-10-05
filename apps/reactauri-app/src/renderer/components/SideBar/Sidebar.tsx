@@ -7,13 +7,14 @@ import {
   MdWarning,
   MdOutlineMobileFriendly,
   MdMobiledataOff,
+  MdStorage,
 } from "react-icons/md"
 import { FaMagic } from "react-icons/fa"
 import styled from "styled-components"
 
 import SideBarButton from "../SideBarButton"
 import { reactauriLogo } from "../../images"
-import { ServerStatus } from "../../contexts/Standalone/useStandalone"
+import type { ServerStatus } from "../../contexts/Standalone/useStandalone"
 
 interface SideBarContainerProps {
   $isOpen: boolean
@@ -35,7 +36,7 @@ const Spacer = styled.div`
 
 function SideBar({ isOpen, serverStatus }: { isOpen: boolean; serverStatus: ServerStatus }) {
   let serverIcon = MdMobiledataOff
-  let iconColor
+  let iconColor: string | undefined
   let serverText = "Stopped"
   if (serverStatus === "started") {
     serverIcon = MdOutlineMobileFriendly
@@ -63,6 +64,12 @@ function SideBar({ isOpen, serverStatus }: { isOpen: boolean; serverStatus: Serv
         path="/state/subscriptions"
         matchPath="/state"
         text="State"
+      />
+      <SideBarButton
+        icon={MdStorage}
+        path="/storage/asyncstorage"
+        matchPath="/storage"
+        text="Storage"
       />
       <SideBarButton
         icon={MdPhoneIphone}
