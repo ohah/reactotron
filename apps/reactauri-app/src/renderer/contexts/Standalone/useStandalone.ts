@@ -227,7 +227,13 @@ export function reducer(state: State, action: Action) {
           return
         }
 
-        connection.commands = [action.payload, ...connection.commands]
+        const MAX_COMMANDS = 2000
+        
+        connection.commands.unshift(action.payload)
+        
+        if (connection.commands.length > MAX_COMMANDS) {
+          connection.commands.pop()
+        }
       })
     case ActionTypes.ClearConnectionCommands:
       return produce(state, (draftState) => {
