@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useMemo } from "react"
+import React, { useCallback, useContext, useMemo, useRef, useLayoutEffect } from "react"
 import * as path from '@tauri-apps/api/path';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import debounce from "lodash.debounce"
@@ -10,7 +10,6 @@ import {
   EmptyState,
   ReactotronContext,
   TimelineContext,
-  VirtualizedTimeline,
   RandomJoke,
 } from "reactotron-core-ui"
 import {
@@ -35,6 +34,8 @@ const TimelineContainer = styled.div`
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 `
 const SearchContainer = styled.div`
   display: flex;
@@ -83,6 +84,12 @@ export const ButtonContainer = styled.div`
   cursor: pointer;
 `
 
+const CommandWrapper = styled.div`
+  display: block;
+  width: 100%;
+  position: relative;
+`
+
 function Timeline() {
   const { sendCommand, clearCommands, commands, openDispatchModal } = useContext(ReactotronContext)
   const {
@@ -102,34 +109,30 @@ function Timeline() {
     setHiddenCommands,
   } = useContext(TimelineContext)
 
-  const renderCommandItem = useCallback((command: any) => {
-    const CommandComponent = timelineCommandResolver(command.type)
-    if (CommandComponent) {
-      return (
-        <CommandComponent
-          key={command.messageId}
-          command={command}
-          copyToClipboard={writeText}
-          readFile={async (filePath) => {
-            try {
-              const data = await readTextFile(filePath)
-              return data
-            } catch (err) {
-              throw new Error("Something failed")
-            }
-          }}
-          sendCommand={sendCommand}
-          dispatchAction={(action: unknown) => {
-            sendCommand("state.action.dispatch", { action })
-          }}
-          openDispatchDialog={openDispatchModal}
-        />
-      )
-    }
-    return null
-  }, [writeText, readTextFile, sendCommand, openDispatchModal])
+  const timelineContainerRef = useRef<HTMLDivElement>(null)
+  const prevScrollHeightRef = useRef(0)
 
-  let filteredCommands: unknown[] = []
+  useLayoutEffect(() => {
+    const container = timelineContainerRef.current
+    if (!container || isReversed) {
+      // 역순일 때는 맨 위로 스크롤
+      if (container) container.scrollTop = 0
+      return
+    }
+
+    const newScrollHeight = container.scrollHeight
+    const heightDifference = newScrollHeight - prevScrollHeightRef.current
+
+    // 콘텐츠가 상단에 추가되었을 때만 스크롤 위치 조정
+    if (heightDifference > 0) {
+      container.scrollTop += heightDifference
+    }
+
+    // 다음 렌더링을 위해 현재 스크롤 높이 저장
+    prevScrollHeightRef.current = newScrollHeight
+  }, [commands, isReversed])
+
+  let filteredCommands: any[] = []
   try {
     filteredCommands = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
   } catch (error) {
@@ -137,6 +140,7 @@ function Timeline() {
     filteredCommands = commands || []
   }
 
+  // isReversed가 true일 때만 reverse() 적용 (일반적인 리버스 모드)
   if (isReversed) {
     filteredCommands = filteredCommands.reverse()
   }
@@ -222,7 +226,7 @@ function Timeline() {
           </SearchContainer>
         )}
       </Header>
-      <TimelineContainer>
+      <TimelineContainer ref={timelineContainerRef}>
         {filteredCommands.length === 0 ? (
           <EmptyState icon={MdReorder} title="No Activity">
             <HelpMessage>
@@ -235,12 +239,37 @@ function Timeline() {
             <RandomJoke />
           </EmptyState>
         ) : (
-          <VirtualizedTimeline
-            items={filteredCommands}
-            itemHeight={55}
-            renderItem={renderCommandItem}
-            overscan={10}
-          />
+          filteredCommands.map((command) => {
+            const CommandComponent = timelineCommandResolver(command.type)
+
+            if (CommandComponent) {
+              return (
+                <CommandWrapper 
+                  key={command.messageId}
+                >
+                  <CommandComponent
+                    command={command}
+                    copyToClipboard={writeText}
+                    readFile={async (filePath) => {
+                      try {
+                        const data = await readTextFile(filePath)
+                        return data
+                      } catch (err) {
+                        throw new Error("Something failed")
+                      }
+                    }}
+                    sendCommand={sendCommand}
+                    dispatchAction={(action: unknown) => {
+                      sendCommand("state.action.dispatch", { action })
+                    }}
+                    openDispatchDialog={openDispatchModal}
+                  />
+                </CommandWrapper>
+              )
+            }
+
+            return null
+          })
         )}
       </TimelineContainer>
       <TimelineFilterModal
