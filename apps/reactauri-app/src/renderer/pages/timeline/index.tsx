@@ -20,7 +20,7 @@ import {
   MdReorder,
   MdDownload,
 } from "react-icons/md"
-import { FaTimes } from "react-icons/fa"
+import { FaTimes, FaThumbtack } from "react-icons/fa"
 import styled from "styled-components"
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -90,6 +90,41 @@ const CommandWrapper = styled.div`
   position: relative;
 `
 
+const PinnedContainer = styled.div`
+  border-bottom: 1px solid ${(props) => props.theme.backgroundLighter};
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+`
+
+const PinnedHeader = styled.div`
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: bold;
+  color: ${(props) => props.theme.foreground};
+  display: flex;
+  align-items: center;
+
+  svg {
+    margin-right: 10px;
+  }
+`
+
+const PinButton = styled.button<{ $pinned: boolean }>`
+  position: absolute;
+  top: 10px;
+  left: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: ${(props) => (props.$pinned ? props.theme.primary : props.theme.foregroundDark)};
+  opacity: 0.6;
+  z-index: 10;
+
+  &:hover {
+    opacity: 1;
+  }
+`
+
 function Timeline() {
   const { sendCommand, clearCommands, commands, openDispatchModal } = useContext(ReactotronContext)
   const {
@@ -109,38 +144,65 @@ function Timeline() {
     setHiddenCommands,
   } = useContext(TimelineContext)
 
+  const [pinnedIds, setPinnedIds] = React.useState<string[]>([])
+
+  const pinCommand = (messageId: string) => {
+    setPinnedIds((ids) => [...ids, messageId])
+  }
+
+  const unpinCommand = (messageId: string) => {
+    setPinnedIds((ids) => ids.filter((id) => id !== messageId))
+  }
+
+  const pinnedCommands = useMemo(
+    () =>
+      pinnedIds
+        .map((id) => (commands || []).find((cmd) => cmd.messageId === id))
+        .filter(Boolean) as any[],
+    [pinnedIds, commands]
+  )
+
   const timelineContainerRef = useRef<HTMLDivElement>(null)
-  const prevScrollHeightRef = useRef(0)
 
   useLayoutEffect(() => {
     const container = timelineContainerRef.current
-    if (!container || isReversed) {
-      // 역순일 때는 맨 위로 스크롤
-      if (container) container.scrollTop = 0
+    if (!container) return
+
+    // If isReversed is true, scroll to top and don't apply observer
+    if (isReversed) {
+      container.scrollTop = 0
       return
     }
 
-    const newScrollHeight = container.scrollHeight
-    const heightDifference = newScrollHeight - prevScrollHeightRef.current
+    let prevScrollHeight = container.scrollHeight
 
-    // 콘텐츠가 상단에 추가되었을 때만 스크롤 위치 조정
-    if (heightDifference > 0) {
-      container.scrollTop += heightDifference
+    const observer = new MutationObserver(() => {
+      const newScrollHeight = container.scrollHeight
+      const heightDifference = newScrollHeight - prevScrollHeight
+
+      // Only adjust scroll position when height changes and user is not at the top
+      if (heightDifference !== 0 && container.scrollTop > 0) {
+        container.scrollTop += heightDifference
+      }
+      
+      prevScrollHeight = newScrollHeight
+    })
+
+    // Only detect child element addition/removal (exclude attribute changes)
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+    })
+
+    // Disconnect observer when component unmounts
+    return () => {
+      observer.disconnect()
     }
+  }, [isReversed]) 
 
-    // 다음 렌더링을 위해 현재 스크롤 높이 저장
-    prevScrollHeightRef.current = newScrollHeight
-  }, [commands, isReversed])
+  let filteredCommands: any[] = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
 
-  let filteredCommands: any[] = []
-  try {
-    filteredCommands = filterCommands(commands || [], search, exclude, hiddenCommands || []) || []
-  } catch (error) {
-    console.error(error)
-    filteredCommands = commands || []
-  }
-
-  // isReversed가 true일 때만 reverse() 적용 (일반적인 리버스 모드)
+  // Apply reverse() only when isReversed is true (normal reverse mode)
   if (isReversed) {
     filteredCommands = filteredCommands.reverse()
   }
@@ -226,6 +288,48 @@ function Timeline() {
           </SearchContainer>
         )}
       </Header>
+      {pinnedCommands.length > 0 && (
+        <PinnedContainer>
+          <PinnedHeader>
+            <FaThumbtack size={14} />
+            Pinned Items
+          </PinnedHeader>
+          {pinnedCommands.map((command) => {
+            const CommandComponent = timelineCommandResolver(command.type)
+
+            if (CommandComponent) {
+              return (
+                <CommandWrapper 
+                  key={`pinned-${command.messageId}`}
+                >
+                  <PinButton $pinned onClick={() => unpinCommand(command.messageId)}>
+                    <FaThumbtack size={14} />
+                  </PinButton>
+                  <CommandComponent
+                    command={command}
+                    copyToClipboard={writeText}
+                    readFile={async (filePath) => {
+                      try {
+                        const data = await readTextFile(filePath)
+                        return data
+                      } catch (err) {
+                        throw new Error("Something failed")
+                      }
+                    }}
+                    sendCommand={sendCommand}
+                    dispatchAction={(action: unknown) => {
+                      sendCommand("state.action.dispatch", { action })
+                    }}
+                    openDispatchDialog={openDispatchModal}
+                  />
+                </CommandWrapper>
+              )
+            }
+
+            return null
+          })}
+        </PinnedContainer>
+      )}
       <TimelineContainer ref={timelineContainerRef}>
         {filteredCommands.length === 0 ? (
           <EmptyState icon={MdReorder} title="No Activity">
@@ -243,10 +347,24 @@ function Timeline() {
             const CommandComponent = timelineCommandResolver(command.type)
 
             if (CommandComponent) {
+              const isPinned = pinnedIds.includes(command.messageId)
+
               return (
                 <CommandWrapper 
                   key={command.messageId}
                 >
+                  <PinButton
+                    $pinned={isPinned}
+                    onClick={() => {
+                      if (isPinned) {
+                        unpinCommand(command.messageId)
+                      } else {
+                        pinCommand(command.messageId)
+                      }
+                    }}
+                  >
+                    <FaThumbtack size={14} />
+                  </PinButton>
                   <CommandComponent
                     command={command}
                     copyToClipboard={writeText}
