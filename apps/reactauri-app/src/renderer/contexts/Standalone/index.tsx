@@ -42,6 +42,8 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   } = useStandalone()
 
   useEffect(() => {
+    console.log('useEffect 실행됨 - 이벤트 리스너 등록')
+    
     const unlistenStart = listen('start', (event) => {
       console.log('start', repairSerialization(event.payload))
       reactotronIsServerStarted.current = true
